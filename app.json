@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "KhalfiLib",
+    "slug": "KhalfiLib",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "supportsRtl": true,
+      "bundleIdentifier": "com.anonymous.KhalfiLib"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.KhalfiLib",
+      "supportsRtl": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-sharing"
+    ],
+    "extra": {
+      "supportsRTL": true,
+      "eas": {
+        "projectId": "031fc4c5-2964-43c1-8837-fd52ffa95e00"
+      }
+    }
+  }
+}

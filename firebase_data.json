@@ -1,0 +1,75 @@
+{
+    "fields": {
+        "field1": {
+            "title": "الإدارة والأعمال",
+            "description": "كتب في التنظيم والإدارة ومجال الأعمال"
+        },
+        "field2": {
+            "title": "التاريخ الإسلامي",
+            "description": "تاريخ الحضارة الإسلامية وأهم أحداثها"
+        },
+        "field3": {
+            "title": "الروايات والأدب",
+            "description": "مجموعة من الروايات والقصص العربية والعالمية"
+        }
+    },
+    "books": {
+        "book1": {
+            "title": "مقدمة ابن خلدون",
+            "author": "ابن خلدون",
+            "publisher": "دار القلم",
+            "fieldId": "field2",
+            "description": "كتاب يهتم بعلم الاجتماع والتاريخ.",
+            "copiesTotal": 5,
+            "copiesAvailable": 5,
+            "ageCategory": "الكبار",
+            "rating": 10,
+            "barcode": "123456789",
+            "status": "available",
+            "createdAt": "2023-10-01T12:00:00Z"
+        },
+        "book2": {
+            "title": "البداية والنهاية",
+            "author": "ابن كثير",
+            "publisher": "مكتبة المعارف",
+            "fieldId": "field2",
+            "description": "موسوعة تاريخية إسلامية كبرى.",
+            "copiesTotal": 2,
+            "copiesAvailable": 1,
+            "ageCategory": "الشباب",
+            "rating": 9,
+            "barcode": "987654321",
+            "status": "low",
+            "createdAt": "2023-10-02T12:00:00Z"
+        }
+    },
+    "students": {
+        "student1": {
+            "firstName": "أحمد",
+            "lastName": "الخلفي",
+            "birthdate": "2005-05-10",
+            "phone": "0501234567",
+            "borrowedBookId": "book2",
+            "previousBooksCount": 3,
+            "createdAt": "2023-09-15T10:00:00Z"
+        },
+        "student2": {
+            "firstName": "عمر",
+            "lastName": "محمد",
+            "birthdate": "2008-08-20",
+            "phone": "0509876543",
+            "borrowedBookId": null,
+            "previousBooksCount": 0,
+            "createdAt": "2023-10-05T09:30:00Z"
+        }
+    },
+    "borrowRecords": {
+        "record1": {
+            "studentId": "student1",
+            "bookId": "book2",
+            "borrowDate": "2023-10-15T14:00:00Z",
+            "dueDate": "2023-10-29T14:00:00Z",
+            "penaltyDays": 0
+        }
+    }
+}
