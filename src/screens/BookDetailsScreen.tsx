@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Image } from 'react-native';
 import { ChevronRight, Edit3, Trash2, Calendar, Book as BookIcon, Hash, Building2, User, Printer, Star, QrCode } from 'lucide-react-native';
 import * as Print from 'expo-print';
 import QRCode from 'react-native-qrcode-svg';
@@ -119,6 +119,11 @@ export default function BookDetailsScreen() {
             </View>
 
             <ScrollView contentContainerStyle={styles.content}>
+                {book.coverImage && (
+                    <View style={styles.coverContainer}>
+                        <Image source={{ uri: book.coverImage }} style={styles.coverImage} resizeMode="contain" />
+                    </View>
+                )}
                 <View style={[styles.card, { backgroundColor: activeColors.surface }]}>
                     <View style={styles.infoRow}>
                         <BookIcon color={activeColors.primary} size={24} />
@@ -272,6 +277,18 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 12,
         elevation: 4,
+    },
+    coverContainer: {
+        width: '100%',
+        height: 300,
+        marginBottom: SPACING.l,
+        borderRadius: RADIUS.l,
+        overflow: 'hidden',
+        backgroundColor: 'rgba(0,0,0,0.05)',
+    },
+    coverImage: {
+        width: '100%',
+        height: '100%',
     },
     infoRow: {
         flexDirection: 'row',

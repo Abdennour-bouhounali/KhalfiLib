@@ -93,6 +93,7 @@ export default function BooksScreen() {
                         ageCategory: item.ageCategory,
                         rating: item.rating,
                         status: item.status,
+                        coverImage: item.coverImage,
                     }} />}
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}

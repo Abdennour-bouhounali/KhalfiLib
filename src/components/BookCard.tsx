@@ -17,7 +17,7 @@ export interface BookProps {
     ageCategory: string;
     rating: number;
     status: 'available' | 'low' | 'unavailable';
-    imageUri?: string;
+    coverImage?: string;
 }
 
 interface BookCardProps {
@@ -100,8 +100,8 @@ export default function BookCard({ book, onPress }: BookCardProps) {
 
                 {/* Left side Image */}
                 <View style={[styles.imageContainer, { backgroundColor: activeColors.background }]}>
-                    {book.imageUri ? (
-                        <Image source={{ uri: book.imageUri }} style={styles.image} />
+                    {book.coverImage ? (
+                        <Image source={{ uri: book.coverImage }} style={styles.image} />
                     ) : (
                         <View style={[styles.imagePlaceholder, { backgroundColor: isDarkMode ? '#2A2A2A' : '#EBEBEB' }]}>
                             <BookOpen color={activeColors.textTertiary} size={32} />

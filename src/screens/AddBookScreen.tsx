@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Modal } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Modal, Image } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { ArrowRight, ChevronDown, Check, Printer, Box, X, Star, QrCode } from 'lucide-react-native';
+import { ArrowRight, ChevronDown, Check, Printer, Box, X, Star, QrCode, Camera, Image as ImageIcon } from 'lucide-react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
@@ -25,10 +26,11 @@ export default function AddBookScreen() {
     const [author, setAuthor] = useState('');
     const [publisher, setPublisher] = useState('');
     const [copiesTotal, setCopiesTotal] = useState('');
-    const [ageCategory, setAgeCategory] = useState<'الأطفال' | 'الشباب' | 'الكبار' | null>(null);
+    const [ageCategory, setAgeCategory] = useState<string | null>(null);
     const [selectedField, setSelectedField] = useState<Field | null>(null);
     const [rating, setRating] = useState('7');
     const [barcode, setBarcode] = useState('');
+    const [coverImage, setCoverImage] = useState<string | null>(null);
 
     const [fields, setFields] = useState<Field[]>([]);
     const [loadingFields, setLoadingFields] = useState(true);
@@ -39,6 +41,38 @@ export default function AddBookScreen() {
     const ACCENT = isDarkMode ? '#8D6E63' : COLORS.secondary;
     const ACCENT_DARK = isDarkMode ? '#D7CCC8' : '#A7805A';
     const ACCENT_LIGHT = isDarkMode ? '#4E342E' : '#F7EFE5';
+
+    const takePhoto = async () => {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('فشل', 'نحتاج لإذن الوصول للكاميرا لالتقاط الصورة');
+            return;
+        }
+
+        const result = await ImagePicker.launchCameraAsync({
+            allowsEditing: true,
+            aspect: [2, 3],
+            quality: 0.5,
+            base64: true,
+        });
+
+        if (!result.canceled) {
+            setCoverImage(`data:image/jpeg;base64,${result.assets[0].base64}`);
+        }
+    };
+
+    const pickImage = async () => {
+        const result = await ImagePicker.launchImageLibraryAsync({
+            allowsEditing: true,
+            aspect: [2, 3],
+            quality: 0.5,
+            base64: true,
+        });
+
+        if (!result.canceled) {
+            setCoverImage(`data:image/jpeg;base64,${result.assets[0].base64}`);
+        }
+    };
 
     useEffect(() => {
         loadFields();
@@ -61,6 +95,7 @@ export default function AddBookScreen() {
                 setAgeCategory(book.ageCategory as any);
                 setRating(book.rating?.toString() || '7');
                 setBarcode(book.barcode || '');
+                setCoverImage(book.coverImage || null);
                 // We'll need to set the selectedField once fields are loaded
                 if (fields.length > 0) {
                     const field = fields.find(f => f.id === book.fieldId);
@@ -118,6 +153,7 @@ export default function AddBookScreen() {
                 fieldId: selectedField.id || '',
                 rating: parseInt(rating, 10) || 0,
                 barcode: barcode || Math.floor(Math.random() * 9000000000000 + 1000000000000).toString(),
+                coverImage: coverImage || undefined,
             };
 
             // Only set available and status on new books
@@ -177,6 +213,33 @@ export default function AddBookScreen() {
 
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 <Text style={[styles.pageTitle, { color: activeColors.text }]}>{isEditing ? 'تعديل الكتاب' : 'إضافة كتاب جديد'}</Text>
+
+                {/* Cover Image Picker */}
+                <View style={styles.coverPickerSection}>
+                    <TouchableOpacity onPress={pickImage} style={[styles.coverPreview, { backgroundColor: activeColors.surface, borderColor: activeColors.border }]}>
+                        {coverImage ? (
+                            <Image source={{ uri: coverImage }} style={styles.coverImageStyle} />
+                        ) : (
+                            <View style={styles.coverPlaceholder}>
+                                <ImageIcon color={activeColors.textTertiary} size={40} />
+                                <Text style={[styles.coverPlaceholderText, { color: activeColors.textTertiary }]}>غلاف الكتاب</Text>
+                            </View>
+                        )}
+                        <View style={styles.cameraIconContainer}>
+                            <TouchableOpacity onPress={takePhoto} style={[styles.cameraIconBadge, { backgroundColor: activeColors.primary, borderColor: activeColors.surface }]}>
+                                <Camera color={activeColors.surface} size={14} />
+                            </TouchableOpacity>
+                        </View>
+                    </TouchableOpacity>
+                    <View style={styles.pickerButtons}>
+                        <TouchableOpacity style={[styles.miniPickerBtn, { backgroundColor: activeColors.surface, borderColor: ACCENT }]} onPress={takePhoto}>
+                            <Text style={[styles.miniPickerText, { color: ACCENT_DARK }]}>التقاط صورة</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.miniPickerBtn, { backgroundColor: activeColors.surface, borderColor: ACCENT }]} onPress={pickImage}>
+                            <Text style={[styles.miniPickerText, { color: ACCENT_DARK }]}>من المعرض</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
 
                 {/* Field Selector */}
                 <View style={styles.formGroup}>
@@ -264,7 +327,7 @@ export default function AddBookScreen() {
                     <View style={styles.ageSelectorContainer}>
                         <Text style={[styles.label, { color: activeColors.textSecondary }]}>الفئة العمرية</Text>
                         <View style={styles.ageButtons}>
-                            {['الكبار', 'الشباب', 'الأطفال'].map((category) => {
+                            {['أطفال', 'إبتدائي', 'متوسط', 'ثانوي', 'جامعي', 'بحث علمي'].map((category) => {
                                 const isSelected = ageCategory === category;
                                 return (
                                     <TouchableOpacity
@@ -274,7 +337,7 @@ export default function AddBookScreen() {
                                             { borderColor: ACCENT, backgroundColor: activeColors.surface },
                                             isSelected ? { backgroundColor: ACCENT_LIGHT } : {}
                                         ]}
-                                        onPress={() => setAgeCategory(category as any)}
+                                        onPress={() => setAgeCategory(category)}
                                     >
                                         <Text style={[
                                             styles.ageButtonText,
@@ -503,6 +566,7 @@ const styles = StyleSheet.create({
     },
     ageButtons: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
         flex: 1,
         justifyContent: 'flex-start',
         gap: SPACING.s,
@@ -513,6 +577,7 @@ const styles = StyleSheet.create({
         paddingVertical: 6,
         paddingHorizontal: 16,
         backgroundColor: COLORS.surface,
+        marginBottom: 8,
     },
     ageButtonText: {
         fontFamily: FONTS.regular,
@@ -681,5 +746,67 @@ const styles = StyleSheet.create({
         color: COLORS.textSecondary,
         textAlign: 'center',
         marginTop: SPACING.xl,
+    },
+    // Cover Picker Styles
+    coverPickerSection: {
+        alignItems: 'center',
+        marginBottom: SPACING.l,
+    },
+    coverPreview: {
+        width: 120,
+        height: 180,
+        borderRadius: RADIUS.m,
+        backgroundColor: COLORS.surface,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        overflow: 'hidden',
+    },
+    coverImageStyle: {
+        width: '100%',
+        height: '100%',
+    },
+    coverPlaceholder: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    coverPlaceholderText: {
+        fontFamily: FONTS.medium,
+        fontSize: 12,
+        marginTop: SPACING.s,
+    },
+    cameraIconContainer: {
+        position: 'absolute',
+        bottom: 8,
+        right: 8,
+    },
+    cameraIconBadge: {
+        backgroundColor: COLORS.primary,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: COLORS.surface,
+    },
+    pickerButtons: {
+        flexDirection: 'row',
+        marginTop: SPACING.m,
+        gap: SPACING.m,
+    },
+    miniPickerBtn: {
+        backgroundColor: COLORS.surface,
+        paddingHorizontal: SPACING.m,
+        paddingVertical: 6,
+        borderRadius: RADIUS.round,
+        borderWidth: 1,
+        borderColor: COLORS.primaryLight,
+    },
+    miniPickerText: {
+        fontFamily: FONTS.medium,
+        fontSize: 12,
+        color: COLORS.primary,
     }
 });

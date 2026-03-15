@@ -23,6 +23,7 @@ export interface Book {
     ageCategory: string; // 'الأطفال', 'الشباب', 'الكبار'
     rating: number; // 0-10
     barcode: string;
+    coverImage?: string; // Base64 or URI
     status: 'available' | 'low' | 'unavailable';
     createdAt?: string; // Stored as ISO string in RTDB
 }
