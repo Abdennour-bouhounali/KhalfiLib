@@ -41,17 +41,19 @@ export const SeedService = {
 
     seedNotifications: async () => {
         try {
-            const notifRef = ref(db, 'notifications/notif_001');
+            const currentVersion = "1.0.0-3"; // Sync this with your build version
+            const notifId = `notif_${currentVersion.replace(/\./g, '_')}`;
+            const notifRef = ref(db, `notifications/${notifId}`);
             const snapshot = await get(notifRef);
 
             if (!snapshot.exists()) {
-                console.log('[SeedService] Seeding initial notification...');
+                console.log(`[SeedService] Seeding notification for version ${currentVersion}...`);
                 await set(notifRef, {
                     title: "تحديث جديد متوفر",
                     message: "اضغط لتحميل آخر نسخة من التطبيق لضمان الحصول على أفضل تجربة ومميزات جديدة.",
                     link: "https://github.com/Abdennour-bouhounali/KhalfiLib/releases/download/v1.0.0-3/library-app-v1.0.0.apk",
                     type: "update",
-                    createdAt: "2026-03-18T10:00:00Z",
+                    createdAt: new Date().toISOString(),
                     createdBy: "super_admin_system"
                 });
             }
