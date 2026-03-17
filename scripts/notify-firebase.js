@@ -20,7 +20,7 @@ async function sendNotification() {
 
         admin.initializeApp({
             credential: admin.credential.cert(serviceAccount),
-            databaseURL: `https://${serviceAccount.project_id}-default-rtdb.firebaseio.com`
+            databaseURL: "https://khalfilib-default-rtdb.europe-west1.firebasedatabase.app"
         });
 
         const db = admin.database();
