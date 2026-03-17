@@ -64,3 +64,13 @@ jobs:
           files: library-app-v${{ env.VERSION_NAME }}.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Send Automated Firebase Notification
+        run: |
+          npm install firebase-admin
+          node scripts/notify-firebase.js
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          VERSION_NAME: ${{ env.VERSION_NAME }}
+          BUILD_NUMBER: ${{ github.run_number }}
+          APK_URL: "https://github.com/Abdennour-bouhounali/KhalfiLib/releases/download/v${{ env.VERSION_NAME }}-${{ github.run_number }}/library-app-v${{ env.VERSION_NAME }}.apk"
