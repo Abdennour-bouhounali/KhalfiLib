@@ -49,7 +49,7 @@ export const SeedService = {
                 await set(notifRef, {
                     title: "تحديث جديد متوفر",
                     message: "اضغط لتحميل آخر نسخة من التطبيق لضمان الحصول على أفضل تجربة ومميزات جديدة.",
-                    link: "https://github.com/Abdennour-bouhounali/KhalfiLib/releases",
+                    link: "https://github.com/Abdennour-bouhounali/KhalfiLib/releases/download/v1.0.0-3/library-app-v1.0.0.apk",
                     type: "update",
                     createdAt: "2026-03-18T10:00:00Z",
                     createdBy: "super_admin_system"
