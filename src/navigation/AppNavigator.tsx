@@ -32,6 +32,7 @@ import AccountStatusScreen from '../screens/AccountStatusScreen';
 import ManageSubscriptionScreen from '../screens/ManageSubscriptionScreen';
 import AdminManagementScreen from '../screens/AdminManagementScreen';
 import CatalogHubScreen from '../screens/CatalogHubScreen';
+import NotificationScreen from '../screens/NotificationScreen';
 import FloatingTabBar from '../components/FloatingTabBar';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -199,6 +200,7 @@ export default function AppNavigator() {
                     <Stack.Screen name="Login" component={LoginScreen} />
                     <Stack.Screen name="Register" component={RegisterScreen} />
                     <Stack.Screen name="Settings" component={SettingsScreen} />
+                    <Stack.Screen name="Notifications" component={NotificationScreen} />
                 </>
             ) : user.status !== 'active' ? (
                 // Pending / Rejected / Inactive Stack
@@ -213,6 +215,7 @@ export default function AppNavigator() {
                     <Stack.Screen name="BookDetails" component={BookDetailsScreen} />
                     <Stack.Screen name="BookChat" component={BookChatScreen} />
                     <Stack.Screen name="AddStudent" component={AddStudentScreen} />
+                    <Stack.Screen name="Notifications" component={NotificationScreen} />
                 </>
             ) : user.role === 'student' ? (
                 // Student Stack
@@ -221,9 +224,9 @@ export default function AppNavigator() {
                     <Stack.Screen name="BookDetails" component={BookDetailsScreen} />
                     <Stack.Screen name="BookChat" component={BookChatScreen} />
                     <Stack.Screen name="AddStudent" component={AddStudentScreen} />
+                    <Stack.Screen name="Notifications" component={NotificationScreen} />
                 </>
             ) : (
-                // Admin Stack
                 <>
                     <Stack.Screen name="MainTabs" component={MainTabNavigator} />
                     <Stack.Screen name="AddBook" component={AddBookScreen} />
@@ -232,6 +235,7 @@ export default function AppNavigator() {
                     <Stack.Screen name="BookChat" component={BookChatScreen} />
                     <Stack.Screen name="StudentDetails" component={StudentDetailsScreen} />
                     <Stack.Screen name="ManageSubscription" component={ManageSubscriptionScreen} />
+                    <Stack.Screen name="Notifications" component={NotificationScreen} />
                 </>
             )}
         </Stack.Navigator>

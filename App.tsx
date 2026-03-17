@@ -8,6 +8,8 @@ import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { AuthProvider } from './src/context/AuthContext';
 import { SeedService } from './src/services/SeedService';
 
+import NotificationHandler from './src/components/NotificationHandler';
+
 function AppContent() {
   const { isDarkMode } = useTheme();
 
@@ -17,6 +19,7 @@ function AppContent() {
       <NavigationContainer>
         <AppNavigator />
       </NavigationContainer>
+      <NotificationHandler />
     </>
   );
 }

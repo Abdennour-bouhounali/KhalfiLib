@@ -105,6 +105,16 @@ export interface LibraryChatMessage {
     timestamp: number;
 }
 
+export interface AppNotification {
+    id?: string;
+    title: string;
+    message: string;
+    link?: string;
+    type: 'info' | 'update' | 'alert';
+    createdAt: string;
+    createdBy: string;
+}
+
 // Helper to convert RTDB Object to Array
 const objectToArray = <T>(obj: Record<string, any> | null): T[] => {
     if (!obj) return [];
@@ -745,6 +755,47 @@ export const LibraryChatAPI = {
         });
 
         return () => off(chatRef, 'value', unsubscribe);
+    }
+};
+
+// ==========================================
+// NOTIFICATIONS API
+// ==========================================
+export const NotificationsAPI = {
+    getAll: async (): Promise<AppNotification[]> => {
+        try {
+            const notifsRef = ref(db, 'notifications');
+            const snapshot = await get(notifsRef);
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                return objectToArray<AppNotification>(data).sort((a, b) =>
+                    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                );
+            }
+            return [];
+        } catch (error) {
+            console.error('[NotificationsAPI] getAll failed:', error);
+            throw error;
+        }
+    },
+
+    listenToLatest: (callback: (notification: AppNotification | null) => void) => {
+        const notifsRef = ref(db, 'notifications');
+        const q = query(notifsRef, orderByChild('createdAt'));
+
+        const unsubscribe = onValue(q, (snapshot) => {
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                const notifs = objectToArray<AppNotification>(data).sort((a, b) =>
+                    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                );
+                callback(notifs[0] || null);
+            } else {
+                callback(null);
+            }
+        });
+
+        return () => off(notifsRef, 'value', unsubscribe);
     }
 };
 

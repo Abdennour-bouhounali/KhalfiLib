@@ -21,6 +21,7 @@ export type RootStackParamList = {
     StudentDetails: { studentId: string };
     ManageSubscription: { studentId: string };
     AdminSubscriptions: undefined;
+    Notifications: undefined;
 };
 
 export type MainTabParamList = {
@@ -53,5 +54,6 @@ export type StudentTabParamList = {
     Catalog: undefined;
     LibraryChat: undefined;
     PublicCatalog: undefined;
+    Notifications: undefined;
     Settings: undefined;
 };

@@ -1,3 +1,5 @@
+import { db } from './firebase';
+import { ref, get, set } from 'firebase/database';
 import { UsersAPI } from './database';
 import { AuthService } from './AuthService';
 
@@ -29,8 +31,32 @@ export const SeedService = {
             } else {
                 console.log('[SeedService] Super Admin already exists.');
             }
+
+            // Seed default notification
+            await SeedService.seedNotifications();
         } catch (error) {
             console.error('[SeedService] Seeding failed:', error);
+        }
+    },
+
+    seedNotifications: async () => {
+        try {
+            const notifRef = ref(db, 'notifications/notif_001');
+            const snapshot = await get(notifRef);
+
+            if (!snapshot.exists()) {
+                console.log('[SeedService] Seeding initial notification...');
+                await set(notifRef, {
+                    title: "تحديث جديد متوفر",
+                    message: "اضغط لتحميل آخر نسخة من التطبيق لضمان الحصول على أفضل تجربة ومميزات جديدة.",
+                    link: "https://github.com/Abdennour-bouhounali/KhalfiLib/releases",
+                    type: "update",
+                    createdAt: "2026-03-18T10:00:00Z",
+                    createdBy: "super_admin_system"
+                });
+            }
+        } catch (error) {
+            console.error('[SeedService] Notification seeding failed:', error);
         }
     }
 };

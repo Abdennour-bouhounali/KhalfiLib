@@ -5,6 +5,8 @@ import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useNavigation } from '@react-navigation/native';
+
 interface HeaderProps {
     showSearch?: boolean;
     showNotification?: boolean;
@@ -34,9 +36,18 @@ export default function Header({
     showLogout = false,
     onLogout
 }: HeaderProps) {
+    const navigation = useNavigation<any>();
     const { isDarkMode } = useTheme();
     const insets = useSafeAreaInsets();
     const activeColors = isDarkMode ? DARK_COLORS : COLORS;
+
+    const handleNotificationPress = () => {
+        if (onNotificationPress) {
+            onNotificationPress();
+        } else {
+            navigation.navigate('Notifications');
+        }
+    };
 
     return (
         <View style={[
@@ -78,7 +89,7 @@ export default function Header({
                         <View style={styles.titleContainer}>
                             <Text style={[styles.title, { color: activeColors.text }]} numberOfLines={1}>{title}</Text>
                             {showNotification && (
-                                <TouchableOpacity style={styles.notificationButton} onPress={onNotificationPress}>
+                                <TouchableOpacity style={styles.notificationButton} onPress={handleNotificationPress}>
                                     <Bell color={activeColors.text} size={20} />
                                     <View style={[styles.badge, { backgroundColor: activeColors.primaryLight }]} />
                                 </TouchableOpacity>
