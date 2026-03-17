@@ -6,9 +6,11 @@ import { useTheme } from '../theme/ThemeContext';
 import Header from '../components/Header';
 import Card from '../components/Card';
 import { NotificationsAPI, AppNotification } from '../services/database';
+import { useAuth } from '../context/AuthContext';
 
 export default function NotificationScreen() {
     const { isDarkMode } = useTheme();
+    const { user } = useAuth();
     const activeColors = isDarkMode ? DARK_COLORS : COLORS;
     const [notifications, setNotifications] = useState<AppNotification[]>([]);
     const [loading, setLoading] = useState(true);
@@ -18,6 +20,12 @@ export default function NotificationScreen() {
         try {
             const data = await NotificationsAPI.getAll();
             setNotifications(data);
+
+            // Mark all fetched notifications as seen if they have an ID
+            if (user?.id && data.length > 0) {
+                const unseen = data.filter((n): n is AppNotification & { id: string } => !!n.id);
+                await Promise.all(unseen.map(n => NotificationsAPI.markAsSeen(user.id, n.id)));
+            }
         } catch (error) {
             console.error('[NotificationScreen] Failed to load notifications:', error);
         } finally {

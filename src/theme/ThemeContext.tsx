@@ -30,7 +30,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
                 if (savedTheme === 'light' || savedTheme === 'dark') {
                     setThemeState(savedTheme);
                 } else {
-                    // Force Light theme as default regardless of system theme
+                    // Force Light theme as default
                     setThemeState('light');
                 }
             } catch (error) {
@@ -38,7 +38,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
             }
         };
         loadTheme();
-    }, [systemColorScheme]);
+    }, []);
 
     const setTheme = async (mode: ThemeMode) => {
         try {

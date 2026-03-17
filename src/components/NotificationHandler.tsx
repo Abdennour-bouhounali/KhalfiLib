@@ -6,18 +6,49 @@ import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { NotificationsAPI, AppNotification } from '../services/database';
 
+import { useAuth } from '../context/AuthContext';
+import appConfig from '../../app.json';
+
 const LAST_SEEN_KEY = '@last_seen_notification';
 
 export default function NotificationHandler() {
     const { isDarkMode } = useTheme();
+    const { user } = useAuth();
     const activeColors = isDarkMode ? DARK_COLORS : COLORS;
     const [modalVisible, setModalVisible] = useState(false);
     const [latestNotif, setLatestNotif] = useState<AppNotification | null>(null);
+
+    const currentVersion = appConfig.expo.version;
+
+    const isVersionNewer = (notifVersion?: string) => {
+        if (!notifVersion) return true; // Default to showing if no version specified
+
+        const current = currentVersion.split('.').map(Number);
+        const notif = notifVersion.split('.').map(Number);
+
+        for (let i = 0; i < Math.max(current.length, notif.length); i++) {
+            const v1 = current[i] || 0;
+            const v2 = notif[i] || 0;
+            if (v2 > v1) return true;
+            if (v2 < v1) return false;
+        }
+        return false;
+    };
 
     useEffect(() => {
         const unsubscribe = NotificationsAPI.listenToLatest(async (notif) => {
             if (!notif || notif.type !== 'update') return;
 
+            // 1. Version Check
+            if (!isVersionNewer(notif.version)) return;
+
+            // 2. Persistent Seen Check (Firebase)
+            if (user?.id && notif.id) {
+                const alreadySeen = await NotificationsAPI.isSeen(user.id, notif.id);
+                if (alreadySeen) return;
+            }
+
+            // 3. Local Seen Check (Fallback/Extra layer)
             const lastSeenId = await AsyncStorage.getItem(LAST_SEEN_KEY);
             if (lastSeenId !== notif.id) {
                 setLatestNotif(notif);
@@ -26,18 +57,25 @@ export default function NotificationHandler() {
         });
 
         return () => unsubscribe();
-    }, []);
+    }, [user, currentVersion]);
 
     const handleAction = async () => {
         if (latestNotif?.link) {
             await Linking.openURL(latestNotif.link);
         }
-        await dismiss();
+        await markSeen();
     };
 
     const dismiss = async () => {
+        await markSeen();
+    };
+
+    const markSeen = async () => {
         if (latestNotif?.id) {
             await AsyncStorage.setItem(LAST_SEEN_KEY, latestNotif.id);
+            if (user?.id) {
+                await NotificationsAPI.markAsSeen(user.id, latestNotif.id);
+            }
         }
         setModalVisible(false);
     };

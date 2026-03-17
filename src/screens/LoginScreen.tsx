@@ -28,9 +28,17 @@ export default function LoginScreen() {
         setLoading(true);
         try {
             const user = await AuthService.login(phone, password);
-            // Let the AuthContext update. AppNavigator will automatically 
-            // switch to the appropriate stack based on user status (active/pending).
             await login(user);
+
+            // Explicitly reset navigation based on role to clear any previous state
+            if (user.status === 'active') {
+                const targetRoot = user.role === 'super_admin' ? 'SuperAdminTabs' :
+                    user.role === 'student' ? 'StudentTabs' : 'MainTabs';
+                navigation.reset({
+                    index: 0,
+                    routes: [{ name: targetRoot }],
+                });
+            }
         } catch (error: any) {
             Alert.alert('خطأ', error.message || 'فشل تسجيل الدخول');
         } finally {

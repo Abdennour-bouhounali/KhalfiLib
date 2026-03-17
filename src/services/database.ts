@@ -117,6 +117,7 @@ export interface AppNotification {
     message: string;
     link?: string;
     type: 'info' | 'update' | 'alert';
+    version?: string; // For update notifications
     createdAt: string;
     createdBy: string;
 }
@@ -841,6 +842,30 @@ export const NotificationsAPI = {
         });
 
         return () => off(notifsRef, 'value', unsubscribe);
+    },
+
+    markAsSeen: async (userId: string, notifId: string): Promise<void> => {
+        try {
+            const seenRef = ref(db, `userNotifications/${userId}/seen/${notifId}`);
+            await set(seenRef, {
+                seen: true,
+                seenAt: new Date().toISOString()
+            });
+        } catch (error) {
+            console.error('[NotificationsAPI] markAsSeen failed:', error);
+            throw error;
+        }
+    },
+
+    isSeen: async (userId: string, notifId: string): Promise<boolean> => {
+        try {
+            const seenRef = ref(db, `userNotifications/${userId}/seen/${notifId}`);
+            const snapshot = await get(seenRef);
+            return snapshot.exists();
+        } catch (error) {
+            console.error('[NotificationsAPI] isSeen failed:', error);
+            return false;
+        }
     }
 };
 
