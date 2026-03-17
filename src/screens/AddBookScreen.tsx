@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Modal, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Modal, Image, Animated } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { ArrowRight, ChevronDown, Check, Printer, Box, X, Star, QrCode, Camera, Image as ImageIcon } from 'lucide-react-native';
+import { ArrowRight, ChevronDown, Check, Printer, Box, X, Star, QrCode, Camera, Image as ImageIcon, Book as BookIcon, PenTool, Building2, Layers, AlignLeft } from 'lucide-react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { BooksAPI, FieldsAPI, Field, Book } from '../services/database';
+import Card from '../components/Card';
 
 export default function AddBookScreen() {
     const insets = useSafeAreaInsets();
@@ -36,6 +37,16 @@ export default function AddBookScreen() {
     const [loadingFields, setLoadingFields] = useState(true);
     const [fieldModalVisible, setFieldModalVisible] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const [fadeAnim] = useState(new Animated.Value(0));
+
+    useEffect(() => {
+        Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+        }).start();
+    }, []);
 
     // Custom style overrides for this specific screen accent (beige/brown)
     const ACCENT = isDarkMode ? '#8D6E63' : COLORS.secondary;
@@ -156,10 +167,18 @@ export default function AddBookScreen() {
                 coverImage: coverImage || undefined,
             };
 
-            // Only set available and status on new books
-            if (!isEditing) {
-                bookPayload.copiesAvailable = parseInt(copiesTotal, 10);
-                bookPayload.status = 'available';
+            // Handle available copies logic
+            const totalCopiesCount = parseInt(copiesTotal, 10);
+
+            if (isEditing) {
+                // When editing, we don't automatically set available = total 
+                // but we must validate that current available doesn't exceed new total
+                // The API will handle the validation and status update
+                bookPayload.copiesTotal = totalCopiesCount;
+            } else {
+                // New book scenario
+                bookPayload.copiesTotal = totalCopiesCount;
+                bookPayload.copiesAvailable = totalCopiesCount;
             }
 
             // Timeout promise
@@ -187,6 +206,8 @@ export default function AddBookScreen() {
             console.error(error);
             if (error.message === 'TIMEOUT') {
                 Alert.alert('خطأ في الاتصال', 'فشل حفظ الكتاب بسبب بطء الاتصال. يرجى المحاولة مرة أخرى.');
+            } else if (error.message.includes('copies')) {
+                Alert.alert('خطأ في البيانات', 'يرجى التأكد من صحة أعداد النسخ (المتاحة لا تتجاوز الكلية)');
             } else {
                 Alert.alert('خطأ', 'حدث خطأ أثناء حفظ الكتاب');
             }
@@ -195,226 +216,251 @@ export default function AddBookScreen() {
         }
     };
 
+    const handleGenerateQR = () => {
+        if (barcode) {
+            Alert.alert(
+                'تجديد رمز QR',
+                'هل أنت متأكد من رغبتك في تغيير رمز QR الحالي؟ هذا الإجراء قد يجعل الرموز المطبوعة سابقاً غير صالحة.',
+                [
+                    { text: 'إلغاء', style: 'cancel' },
+                    {
+                        text: 'تغيير الرمز',
+                        style: 'destructive',
+                        onPress: () => setBarcode(Math.floor(Math.random() * 9000000000000 + 1000000000000).toString())
+                    }
+                ]
+            );
+        } else {
+            setBarcode(Math.floor(Math.random() * 9000000000000 + 1000000000000).toString());
+        }
+    };
+
     return (
         <KeyboardAvoidingView
             style={[styles.container, { backgroundColor: activeColors.background }]}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-            {/* Header */}
-            <View style={[styles.topBackground, { backgroundColor: isDarkMode ? activeColors.surface : COLORS.primaryLight }]}>
-                <View style={[styles.header, { paddingTop: insets.top + SPACING.s }]}>
-                    <TouchableOpacity onPress={() => navigation.goBack()}>
-                        <ArrowRight color={activeColors.text} size={24} />
-                    </TouchableOpacity>
-                    <Text style={[styles.headerTitle, { color: isDarkMode ? activeColors.primary : activeColors.text }]}>مكتبة عشيرة آل خلفي</Text>
-                    <View style={{ width: 24 }} /> {/* Spacer */}
-                </View>
-            </View>
+            <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
+                {/* Header */}
+                <View style={[styles.headerGradient, { backgroundColor: activeColors.primary, paddingTop: insets.top + SPACING.s }]}>
+                    <View style={styles.headerTopRow}>
+                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                            <ArrowRight color={activeColors.surface} size={24} />
+                        </TouchableOpacity>
+                        <Text style={[styles.headerTitle, { color: activeColors.surface }]}>
+                            {isEditing ? 'تعديل كتاب' : 'إضافة كتاب جديد'}
+                        </Text>
+                        <View style={{ width: 40 }} />
+                    </View>
 
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-                <Text style={[styles.pageTitle, { color: activeColors.text }]}>{isEditing ? 'تعديل الكتاب' : 'إضافة كتاب جديد'}</Text>
-
-                {/* Cover Image Picker */}
-                <View style={styles.coverPickerSection}>
-                    <TouchableOpacity onPress={pickImage} style={[styles.coverPreview, { backgroundColor: activeColors.surface, borderColor: activeColors.border }]}>
-                        {coverImage ? (
-                            <Image source={{ uri: coverImage }} style={styles.coverImageStyle} />
-                        ) : (
-                            <View style={styles.coverPlaceholder}>
-                                <ImageIcon color={activeColors.textTertiary} size={40} />
-                                <Text style={[styles.coverPlaceholderText, { color: activeColors.textTertiary }]}>غلاف الكتاب</Text>
-                            </View>
-                        )}
-                        <View style={styles.cameraIconContainer}>
-                            <TouchableOpacity onPress={takePhoto} style={[styles.cameraIconBadge, { backgroundColor: activeColors.primary, borderColor: activeColors.surface }]}>
-                                <Camera color={activeColors.surface} size={14} />
+                    {/* Float Cover Picker */}
+                    <View style={styles.coverFloatContainer}>
+                        <TouchableOpacity onPress={pickImage} style={[styles.coverCard, { backgroundColor: activeColors.surface }]}>
+                            {coverImage ? (
+                                <Image source={{ uri: coverImage }} style={styles.coverImage} />
+                            ) : (
+                                <View style={styles.coverPlaceholder}>
+                                    <ImageIcon color={activeColors.textTertiary} size={40} />
+                                    <Text style={[styles.placeholderText, { color: activeColors.textTertiary }]}>أضف غلاف</Text>
+                                </View>
+                            )}
+                            <TouchableOpacity onPress={takePhoto} style={[styles.cameraBadge, { backgroundColor: activeColors.primary }]}>
+                                <Camera color={activeColors.surface} size={16} />
                             </TouchableOpacity>
-                        </View>
-                    </TouchableOpacity>
-                    <View style={styles.pickerButtons}>
-                        <TouchableOpacity style={[styles.miniPickerBtn, { backgroundColor: activeColors.surface, borderColor: ACCENT }]} onPress={takePhoto}>
-                            <Text style={[styles.miniPickerText, { color: ACCENT_DARK }]}>التقاط صورة</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={[styles.miniPickerBtn, { backgroundColor: activeColors.surface, borderColor: ACCENT }]} onPress={pickImage}>
-                            <Text style={[styles.miniPickerText, { color: ACCENT_DARK }]}>من المعرض</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* Field Selector */}
-                <View style={styles.formGroup}>
-                    <TouchableOpacity
-                        style={[styles.inputContainer, { borderColor: ACCENT, backgroundColor: activeColors.surface }]}
-                        onPress={() => setFieldModalVisible(true)}
-                    >
-                        <View style={styles.rowReverse}>
-                            <Text style={[styles.placeholderText, selectedField && { color: activeColors.text }]}>
-                                {selectedField ? selectedField.title : 'اختر المجال'}
-                            </Text>
-                            <Box color={ACCENT_DARK} size={20} style={styles.iconStyle} />
-                        </View>
-                        <ChevronDown color={activeColors.textTertiary} size={20} />
-                    </TouchableOpacity>
-                </View>
+                <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }}>
+                    <View style={styles.contentBody}>
 
-                <View style={styles.formGroup}>
-                    <View style={[styles.inputContainer, { borderColor: ACCENT, backgroundColor: activeColors.surface }]}>
-                        <TextInput
-                            style={[styles.input, { color: activeColors.text }]}
-                            placeholder="عنوان الكتاب"
-                            placeholderTextColor={activeColors.textTertiary}
-                            value={title}
-                            onChangeText={setTitle}
-                        />
-                        <BookIcon />
-                    </View>
-                </View>
+                        {/* Section 1: Basic Info */}
+                        <Text style={[styles.sectionTitle, { color: activeColors.textSecondary }]}>المعلومات الأساسية</Text>
+                        <Card style={styles.formCard}>
+                            <View style={styles.inputGroup}>
+                                <Text style={[styles.inputLabel, { color: activeColors.textSecondary }]}>عنوان الكتاب</Text>
+                                <View style={[styles.inputWrapper, { borderColor: activeColors.border, backgroundColor: isDarkMode ? activeColors.background : '#F9F9F9' }]}>
+                                    <TextInput
+                                        style={[styles.textInput, { color: activeColors.text }]}
+                                        placeholder="مثال: لغات البرمجة"
+                                        placeholderTextColor={activeColors.textTertiary}
+                                        value={title}
+                                        onChangeText={setTitle}
+                                    />
+                                    <BookIcon color={activeColors.primary} size={20} />
+                                </View>
+                            </View>
 
-                <View style={styles.formGroup}>
-                    <View style={[styles.inputContainer, { borderColor: ACCENT, backgroundColor: activeColors.surface }]}>
-                        <TextInput
-                            style={[styles.input, { color: activeColors.text }]}
-                            placeholder="الوصف"
-                            placeholderTextColor={activeColors.textTertiary}
-                            value={description}
-                            onChangeText={setDescription}
-                        />
-                    </View>
-                </View>
+                            <View style={styles.inputGroup}>
+                                <Text style={[styles.inputLabel, { color: activeColors.textSecondary }]}>المجال / التصنيف</Text>
+                                <TouchableOpacity
+                                    style={[styles.inputWrapper, { borderColor: activeColors.border, backgroundColor: isDarkMode ? activeColors.background : '#F9F9F9' }]}
+                                    onPress={() => setFieldModalVisible(true)}
+                                >
+                                    <ChevronDown color={activeColors.textTertiary} size={20} />
+                                    <Text style={[styles.selectorText, { color: selectedField ? activeColors.text : activeColors.textTertiary }]}>
+                                        {selectedField ? selectedField.title : 'اختر المجال'}
+                                    </Text>
+                                    <Box color={activeColors.primary} size={20} />
+                                </TouchableOpacity>
+                            </View>
 
-                <View style={styles.formGroup}>
-                    <View style={[styles.inputContainer, { borderColor: ACCENT, backgroundColor: activeColors.surface }]}>
-                        <TextInput
-                            style={[styles.input, { color: activeColors.text }]}
-                            placeholder="المؤلف"
-                            placeholderTextColor={activeColors.textTertiary}
-                            value={author}
-                            onChangeText={setAuthor}
-                        />
-                        <PenIcon />
-                    </View>
-                </View>
+                            <View style={styles.inputGroup}>
+                                <Text style={[styles.inputLabel, { color: activeColors.textSecondary }]}>المؤلف</Text>
+                                <View style={[styles.inputWrapper, { borderColor: activeColors.border, backgroundColor: isDarkMode ? activeColors.background : '#F9F9F9' }]}>
+                                    <TextInput
+                                        style={[styles.textInput, { color: activeColors.text }]}
+                                        placeholder="اسم المؤلف"
+                                        placeholderTextColor={activeColors.textTertiary}
+                                        value={author}
+                                        onChangeText={setAuthor}
+                                    />
+                                    <PenTool color={activeColors.primary} size={20} />
+                                </View>
+                            </View>
 
-                <View style={styles.formGroup}>
-                    <View style={[styles.inputContainer, { borderColor: ACCENT, backgroundColor: activeColors.surface }]}>
-                        <TextInput
-                            style={[styles.input, { color: activeColors.text }]}
-                            placeholder="دار النشر"
-                            placeholderTextColor={activeColors.textTertiary}
-                            value={publisher}
-                            onChangeText={setPublisher}
-                        />
-                        <BuildingIcon />
-                    </View>
-                </View>
+                            <View style={styles.inputGroup}>
+                                <Text style={[styles.inputLabel, { color: activeColors.textSecondary }]}>الوصف</Text>
+                                <View style={[styles.inputWrapper, styles.textArea, { borderColor: activeColors.border, backgroundColor: isDarkMode ? activeColors.background : '#F9F9F9' }]}>
+                                    <TextInput
+                                        style={[styles.textInput, { color: activeColors.text, height: 80 }]}
+                                        placeholder="نبذة عن الكتاب..."
+                                        placeholderTextColor={activeColors.textTertiary}
+                                        value={description}
+                                        onChangeText={setDescription}
+                                        multiline
+                                        numberOfLines={4}
+                                    />
+                                    <AlignLeft color={activeColors.primary} size={20} style={{ alignSelf: 'flex-start', marginTop: 12 }} />
+                                </View>
+                            </View>
+                        </Card>
 
-                <View style={styles.formGroup}>
-                    <View style={[styles.inputContainer, { borderColor: ACCENT, backgroundColor: activeColors.surface }]}>
-                        <TextInput
-                            style={[styles.input, { color: activeColors.text }]}
-                            placeholder="عدد النسخ الكلية"
-                            keyboardType="number-pad"
-                            placeholderTextColor={activeColors.textTertiary}
-                            value={copiesTotal}
-                            onChangeText={setCopiesTotal}
-                        />
-                        <LayersIcon />
-                    </View>
-                </View>
+                        {/* Section 2: Cataloging */}
+                        <Text style={[styles.sectionTitle, { color: activeColors.textSecondary }]}>تفاصيل الفهرسة</Text>
+                        <Card style={styles.formCard}>
+                            <View style={styles.inputGroup}>
+                                <Text style={[styles.inputLabel, { color: activeColors.textSecondary }]}>دار النشر</Text>
+                                <View style={[styles.inputWrapper, { borderColor: activeColors.border, backgroundColor: isDarkMode ? activeColors.background : '#F9F9F9' }]}>
+                                    <TextInput
+                                        style={[styles.textInput, { color: activeColors.text }]}
+                                        placeholder="اسم دار النشر"
+                                        placeholderTextColor={activeColors.textTertiary}
+                                        value={publisher}
+                                        onChangeText={setPublisher}
+                                    />
+                                    <Building2 color={activeColors.primary} size={20} />
+                                </View>
+                            </View>
 
-                {/* Age Category Selector */}
-                <View style={styles.formGroup}>
-                    <View style={styles.ageSelectorContainer}>
-                        <Text style={[styles.label, { color: activeColors.textSecondary }]}>الفئة العمرية</Text>
-                        <View style={styles.ageButtons}>
-                            {['أطفال', 'إبتدائي', 'متوسط', 'ثانوي', 'جامعي', 'بحث علمي'].map((category) => {
-                                const isSelected = ageCategory === category;
-                                return (
+                            <View style={styles.inputGroup}>
+                                <Text style={[styles.inputLabel, { color: activeColors.textSecondary }]}>الفئة العمرية</Text>
+                                <View style={styles.ageChipsContainer}>
+                                    {['أطفال', 'إبتدائي', 'متوسط', 'ثانوي', 'جامعي', 'بحث علمي'].map((cat) => {
+                                        const isSelected = ageCategory === cat;
+                                        return (
+                                            <TouchableOpacity
+                                                key={cat}
+                                                onPress={() => setAgeCategory(cat)}
+                                                style={[
+                                                    styles.ageChip,
+                                                    { borderColor: activeColors.border },
+                                                    isSelected && { backgroundColor: activeColors.primary, borderColor: activeColors.primary }
+                                                ]}
+                                            >
+                                                <Text style={[styles.ageChipText, { color: activeColors.textSecondary }, isSelected && { color: activeColors.surface, fontFamily: FONTS.bold }]}>
+                                                    {cat}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+                            </View>
+
+                            <View style={styles.inputGroup}>
+                                <Text style={[styles.inputLabel, { color: activeColors.textSecondary }]}>التقييم (من 10)</Text>
+                                <View style={styles.ratingRow}>
+                                    <Star color={activeColors.warning} size={24} fill={activeColors.warning} />
+                                    <View style={[styles.ratingInputBox, { backgroundColor: isDarkMode ? activeColors.background : '#F5F5F5' }]}>
+                                        <TextInput
+                                            style={[styles.ratingValue, { color: activeColors.primary }]}
+                                            value={rating}
+                                            onChangeText={setRating}
+                                            keyboardType="number-pad"
+                                            maxLength={2}
+                                        />
+                                        <Text style={{ color: activeColors.textTertiary, fontSize: 18 }}>/ 10</Text>
+                                    </View>
+                                </View>
+                            </View>
+                        </Card>
+
+                        {/* Section 3: Inventory & QR */}
+                        <Text style={[styles.sectionTitle, { color: activeColors.textSecondary }]}>المخزون والباركود</Text>
+                        <Card style={styles.formCard}>
+                            <View style={styles.inputGroup}>
+                                <Text style={[styles.inputLabel, { color: activeColors.textSecondary }]}>عدد النسخ الكلية</Text>
+                                <View style={[styles.inputWrapper, { borderColor: activeColors.border, backgroundColor: isDarkMode ? activeColors.background : '#F9F9F9' }]}>
+                                    <TextInput
+                                        style={[styles.textInput, { color: activeColors.text }]}
+                                        placeholder="0"
+                                        keyboardType="number-pad"
+                                        placeholderTextColor={activeColors.textTertiary}
+                                        value={copiesTotal}
+                                        onChangeText={setCopiesTotal}
+                                    />
+                                    <Layers color={activeColors.primary} size={20} />
+                                </View>
+                            </View>
+
+                            <View style={styles.qrSection}>
+                                <View style={[styles.qrPreview, { backgroundColor: 'white' }]}>
+                                    {barcode ? (
+                                        <QRCode value={barcode} size={140} />
+                                    ) : (
+                                        <View style={styles.qrEmpty}>
+                                            <QrCode size={48} color={activeColors.border} />
+                                            <Text style={{ color: activeColors.textTertiary, marginTop: 8 }}>سيتم توليد الرمز تلقائياً</Text>
+                                        </View>
+                                    )}
+                                </View>
+
+                                <View style={styles.qrActions}>
                                     <TouchableOpacity
-                                        key={category}
-                                        style={[
-                                            styles.ageButton,
-                                            { borderColor: ACCENT, backgroundColor: activeColors.surface },
-                                            isSelected ? { backgroundColor: ACCENT_LIGHT } : {}
-                                        ]}
-                                        onPress={() => setAgeCategory(category)}
+                                        style={[styles.qrActionBtn, { backgroundColor: barcode ? activeColors.danger + '15' : activeColors.primary + '15' }]}
+                                        onPress={handleGenerateQR}
                                     >
-                                        <Text style={[
-                                            styles.ageButtonText,
-                                            { color: activeColors.textSecondary },
-                                            isSelected ? { color: ACCENT_DARK, fontFamily: FONTS.bold } : {}
-                                        ]}>
-                                            {category}
+                                        <QrCode size={18} color={barcode ? activeColors.danger : activeColors.primary} />
+                                        <Text style={[styles.qrActionText, { color: barcode ? activeColors.danger : activeColors.primary }]}>
+                                            {barcode ? 'تغيير الرمز' : 'توليد باركود'}
                                         </Text>
                                     </TouchableOpacity>
-                                );
-                            })}
-                        </View>
+
+                                    <TouchableOpacity style={[styles.qrActionBtn, { backgroundColor: activeColors.textTertiary + '15' }]}>
+                                        <Printer size={18} color={activeColors.textSecondary} />
+                                        <Text style={[styles.qrActionText, { color: activeColors.textSecondary }]}>طباعة</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        </Card>
+
+                        {/* Submit Button */}
+                        <TouchableOpacity
+                            style={[styles.submitButton, isSubmitting && { opacity: 0.7 }, { backgroundColor: activeColors.primary }]}
+                            onPress={handleSave}
+                            disabled={isSubmitting}
+                        >
+                            {isSubmitting ? (
+                                <ActivityIndicator color={activeColors.surface} />
+                            ) : (
+                                <View style={styles.btnContent}>
+                                    <Check color={activeColors.surface} size={22} />
+                                    <Text style={styles.submitText}>{isEditing ? 'تحديث البيانات' : 'حفظ الكتاب'}</Text>
+                                </View>
+                            )}
+                        </TouchableOpacity>
                     </View>
-                </View>
-
-                {/* Rating */}
-                <View style={[styles.ratingContainer, { backgroundColor: isDarkMode ? activeColors.surface : '#F7EFE5' }]}>
-                    <View style={[styles.ratingInputWrapper, { backgroundColor: isDarkMode ? activeColors.background : '#F5F5F5' }]}>
-                        <Text style={[styles.ratingMax, { color: activeColors.textTertiary }]}>/ 10</Text>
-                        <TextInput
-                            style={[styles.ratingInput, { color: activeColors.primary }]}
-                            value={rating}
-                            onChangeText={setRating}
-                            keyboardType="number-pad"
-                            maxLength={2}
-                        />
-                    </View>
-                    <View style={styles.ratingLabelRow}>
-                        <Text style={[styles.ratingLabel, { color: activeColors.text }]}>التقييم (من 10)</Text>
-                        <Star color={activeColors.warning} size={20} fill={activeColors.warning} />
-                    </View>
-                </View>
-
-                {/* QR Code Section */}
-                <View style={styles.barcodeSection}>
-                    <Text style={[styles.barcodeTitle, { color: activeColors.text }]}>معاينة رمز QR</Text>
-                    {barcode ? (
-                        <View style={[styles.barcodeWrapper, { backgroundColor: 'white' }]}>
-                            <QRCode value={barcode} size={120} />
-                            <Text style={[styles.barcodeNumber, { color: COLORS.text }]}>{barcode}</Text>
-                        </View>
-                    ) : (
-                        <View style={[styles.barcodePlaceholder, { borderColor: activeColors.border }]}>
-                            <QrCode color={activeColors.textTertiary} size={40} />
-                            <Text style={[styles.barcodeInfo, { color: activeColors.textTertiary }]}>توليد رمز QR لحفظ الكتاب</Text>
-                        </View>
-                    )}
-
-                    <TouchableOpacity
-                        style={[styles.barcodeButton, { backgroundColor: ACCENT_DARK }]}
-                        onPress={() => setBarcode(Math.floor(Math.random() * 9000000000000 + 1000000000000).toString())}
-                    >
-                        <Text style={styles.barcodeButtonText}>{barcode ? 'تغيير رمز QR' : 'توليد رمز QR'}</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={[styles.barcodeButtonOutline, { borderColor: ACCENT_DARK }]}>
-                        <Printer color={ACCENT_DARK} size={20} style={{ marginRight: 8 }} />
-                        <Text style={[styles.barcodeButtonText, { color: ACCENT_DARK }]}>طباعة الباركود</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Submit */}
-                <TouchableOpacity
-                    style={[styles.submitButton, isSubmitting && { opacity: 0.7 }, { backgroundColor: isDarkMode ? activeColors.primary : '#4E342E' }]}
-                    onPress={handleSave}
-                    disabled={isSubmitting}
-                >
-                    {isSubmitting ? (
-                        <ActivityIndicator color={activeColors.surface} />
-                    ) : (
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Check color={activeColors.surface} size={20} style={{ marginRight: 8 }} />
-                            <Text style={[styles.submitText, { color: activeColors.surface }]}>حفظ الكتاب</Text>
-                        </View>
-                    )}
-                </TouchableOpacity>
-
+                </Animated.View>
             </ScrollView>
 
             {/* Field Selection Modal */}
@@ -425,7 +471,7 @@ export default function AddBookScreen() {
                 onRequestClose={() => setFieldModalVisible(false)}
             >
                 <View style={styles.modalOverlay}>
-                    <View style={[styles.modalView, { backgroundColor: activeColors.surface }]}>
+                    <View style={[styles.modalContent, { backgroundColor: activeColors.surface }]}>
                         <View style={styles.modalHeader}>
                             <TouchableOpacity onPress={() => setFieldModalVisible(false)}>
                                 <X color={activeColors.text} size={24} />
@@ -436,14 +482,14 @@ export default function AddBookScreen() {
                         {loadingFields ? (
                             <ActivityIndicator size="large" color={activeColors.primary} />
                         ) : (
-                            <ScrollView>
+                            <ScrollView contentContainerStyle={styles.fieldsList}>
                                 {fields.map((field) => (
                                     <TouchableOpacity
                                         key={field.id}
                                         style={[
                                             styles.fieldItem,
-                                            { borderBottomColor: activeColors.border },
-                                            selectedField?.id === field.id && [styles.selectedFieldItem, { backgroundColor: isDarkMode ? activeColors.background : '#F5F5F5' }]
+                                            { backgroundColor: activeColors.surface },
+                                            selectedField?.id === field.id && { backgroundColor: isDarkMode ? activeColors.background : '#F5F5F5' }
                                         ]}
                                         onPress={() => {
                                             setSelectedField(field);
@@ -451,16 +497,17 @@ export default function AddBookScreen() {
                                         }}
                                     >
                                         <Text style={[
-                                            styles.fieldText,
+                                            styles.fieldItemText,
                                             { color: activeColors.text },
-                                            selectedField?.id === field.id && [styles.selectedFieldText, { color: activeColors.primary }]
+                                            selectedField?.id === field.id && { color: activeColors.primary, fontFamily: FONTS.bold }
                                         ]}>
                                             {field.title}
                                         </Text>
+                                        {selectedField?.id === field.id && <Check color={activeColors.primary} size={20} />}
                                     </TouchableOpacity>
                                 ))}
                                 {fields.length === 0 && (
-                                    <Text style={[styles.emptyText, { color: activeColors.textSecondary }]}>لا يوجد مجالات مضافة. يرجى إضافتها من شاشة المجالات.</Text>
+                                    <Text style={[styles.placeholderText, { color: activeColors.textSecondary, textAlign: 'center', marginTop: 20 }]}>لا يوجد مجالات مضافة. يرجى إضافتها من شاشة المجالات.</Text>
                                 )}
                             </ScrollView>
                         )}
@@ -471,244 +518,235 @@ export default function AddBookScreen() {
     );
 }
 
-// Custom simple Icons to simulate the design
-const BookIcon = () => <View style={styles.iconSimulated}><Text style={styles.iconSimText}>📖</Text></View>;
-const PenIcon = () => <View style={styles.iconSimulated}><Text style={styles.iconSimText}>🖋</Text></View>;
-const BuildingIcon = () => <View style={styles.iconSimulated}><Text style={styles.iconSimText}>🏛</Text></View>;
-const LayersIcon = () => <View style={styles.iconSimulated}><Text style={styles.iconSimText}>📚</Text></View>;
-const StarIcon = () => <View style={styles.iconSimulated}><Text style={styles.iconSimText}>⭐</Text></View>;
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#FAF5EF', // Very light soft primary tint
     },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: SPACING.m,
-        paddingBottom: SPACING.m,
+    scrollContent: {
+        flexGrow: 1,
     },
-    topBackground: {
-        backgroundColor: COLORS.primaryLight,
-        paddingBottom: 0,
+    headerGradient: {
+        height: 220,
         borderBottomLeftRadius: RADIUS.xl,
         borderBottomRightRadius: RADIUS.xl,
+        paddingHorizontal: SPACING.m,
+        zIndex: 10,
+    },
+    headerTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: SPACING.s,
+    },
+    backButton: {
+        padding: SPACING.s,
     },
     headerTitle: {
         fontFamily: FONTS.bold,
-        fontSize: 16,
-        color: '#3B827A',
+        fontSize: 20,
     },
-    pageTitle: {
-        fontFamily: FONTS.bold,
-        fontSize: 24,
-        color: COLORS.text,
-        textAlign: 'center',
-        marginVertical: SPACING.l,
+    coverFloatContainer: {
+        position: 'absolute',
+        bottom: -50,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
     },
-    scrollContent: {
+    coverCard: {
+        width: 120,
+        height: 180,
+        borderRadius: RADIUS.m,
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 5 },
+        shadowOpacity: 0.2,
+        shadowRadius: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
+        overflow: 'hidden',
+    },
+    coverImage: {
+        width: '100%',
+        height: '100%',
+    },
+    coverPlaceholder: {
+        alignItems: 'center',
+    },
+    cameraBadge: {
+        position: 'absolute',
+        bottom: 8,
+        right: 8,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: '#FFF',
+    },
+    contentBody: {
+        paddingTop: 70, // Space for the floating cover
         paddingHorizontal: SPACING.m,
         paddingBottom: 40,
     },
-    formGroup: {
-        marginBottom: SPACING.m,
+    sectionTitle: {
+        fontFamily: FONTS.bold,
+        fontSize: 14,
+        marginTop: SPACING.l,
+        marginBottom: SPACING.s,
+        marginHorizontal: SPACING.s,
+        textAlign: 'right',
     },
-    inputContainer: {
+    formCard: {
+        marginHorizontal: 0, // Fill the body padding correctly
+        padding: SPACING.l,
+        gap: SPACING.m,
+    },
+    inputGroup: {
+        marginBottom: SPACING.s,
+    },
+    inputLabel: {
+        fontFamily: FONTS.medium,
+        fontSize: 14,
+        marginBottom: 6,
+        textAlign: 'right',
+    },
+    inputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: COLORS.surface,
         borderWidth: 1.5,
-        borderRadius: RADIUS.round,
-        paddingHorizontal: SPACING.l,
-        height: 52,
+        borderRadius: RADIUS.m,
+        paddingHorizontal: SPACING.m,
+        height: 54,
     },
-    input: {
+    textArea: {
+        height: 'auto',
+        alignItems: 'flex-start',
+        paddingVertical: SPACING.s,
+    },
+    textInput: {
         flex: 1,
         fontFamily: FONTS.regular,
         fontSize: 16,
-        color: COLORS.text,
         textAlign: 'right',
+        marginRight: SPACING.s,
     },
-    rowReverse: {
-        flexDirection: 'row-reverse',
-        alignItems: 'center',
-    },
-    placeholderText: {
+    selectorText: {
+        flex: 1,
         fontFamily: FONTS.regular,
         fontSize: 16,
-        color: COLORS.textTertiary,
+        textAlign: 'right',
         marginRight: SPACING.s,
-        textAlign: 'right',
     },
-    iconStyle: {
-        marginLeft: SPACING.xs,
-    },
-    iconSimulated: {
-        marginLeft: SPACING.s,
-    },
-    iconSimText: {
-        fontSize: 18,
-    },
-    ageSelectorContainer: {
-        flexDirection: 'row-reverse',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    label: {
-        fontFamily: FONTS.bold,
-        fontSize: 16,
-        color: COLORS.textSecondary,
-        marginRight: SPACING.m,
-        textAlign: 'right',
-    },
-    ageButtons: {
+    ageChipsContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        flex: 1,
-        justifyContent: 'flex-start',
-        gap: SPACING.s,
+        justifyContent: 'flex-end',
+        gap: 8,
     },
-    ageButton: {
-        borderWidth: 1.5,
-        borderRadius: RADIUS.round,
-        paddingVertical: 6,
+    ageChip: {
         paddingHorizontal: 16,
-        backgroundColor: COLORS.surface,
-        marginBottom: 8,
+        paddingVertical: 8,
+        borderRadius: RADIUS.round,
+        borderWidth: 1.5,
     },
-    ageButtonText: {
-        fontFamily: FONTS.regular,
-        fontSize: 14,
-        color: COLORS.textSecondary,
-    },
-    ratingContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        backgroundColor: '#F7EFE5',
-        padding: SPACING.m,
-        borderRadius: RADIUS.l,
-        marginBottom: SPACING.l,
-    },
-    ratingInputWrapper: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F5F5F5',
-        paddingHorizontal: SPACING.m,
-        borderRadius: RADIUS.m,
-        height: 48,
-    },
-    ratingInput: {
-        fontFamily: FONTS.bold,
-        fontSize: 18,
-        color: COLORS.primary,
-        width: 40,
-        textAlign: 'center',
-    },
-    ratingMax: {
+    ageChipText: {
+        fontSize: 13,
         fontFamily: FONTS.medium,
-        fontSize: 16,
-        color: COLORS.textTertiary,
-        marginLeft: 4,
     },
-    ratingLabelRow: {
+    ratingRow: {
         flexDirection: 'row-reverse',
         alignItems: 'center',
+        gap: SPACING.m,
     },
-    ratingLabel: {
-        fontFamily: FONTS.bold,
-        fontSize: 16,
-        color: COLORS.text,
-    },
-    barcodeSection: {
+    ratingInputBox: {
+        flexDirection: 'row-reverse',
         alignItems: 'center',
-        marginVertical: SPACING.l,
+        paddingHorizontal: SPACING.m,
+        borderRadius: RADIUS.m,
+        height: 50,
+        gap: 4,
     },
-    barcodeTitle: {
+    ratingValue: {
         fontFamily: FONTS.bold,
-        fontSize: 16,
-        color: COLORS.text,
-        marginBottom: SPACING.m,
+        fontSize: 22,
+        width: 35,
+        textAlign: 'center',
     },
-    barcodeWrapper: {
+    qrSection: {
         alignItems: 'center',
+        paddingTop: SPACING.s,
+    },
+    qrPreview: {
         padding: SPACING.m,
-        backgroundColor: COLORS.surface,
-        borderRadius: RADIUS.m,
-        marginBottom: SPACING.l,
+        borderRadius: RADIUS.l,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
     },
-    barcodePlaceholder: {
-        alignItems: 'center',
+    qrEmpty: {
+        width: 140,
+        height: 140,
         justifyContent: 'center',
-        padding: SPACING.xl,
+        alignItems: 'center',
         borderWidth: 1,
+        borderColor: '#EEE',
         borderStyle: 'dashed',
-        borderColor: COLORS.border,
-        borderRadius: RADIUS.m,
-        marginBottom: SPACING.l,
-        width: '100%',
+        borderRadius: RADIUS.l,
     },
-    barcodeInfo: {
-        fontFamily: FONTS.medium,
-        fontSize: 14,
-        color: COLORS.textTertiary,
-        marginTop: SPACING.s,
-    },
-    barcodeNumber: {
-        fontFamily: FONTS.bold,
-        fontSize: 16,
-        letterSpacing: 2,
-    },
-    barcodeButton: {
-        width: '100%',
-        paddingVertical: 14,
-        borderRadius: RADIUS.round,
-        alignItems: 'center',
-        marginBottom: SPACING.m,
-    },
-    barcodeButtonOutline: {
-        width: '100%',
-        paddingVertical: 14,
-        borderRadius: RADIUS.round,
-        alignItems: 'center',
-        borderWidth: 1.5,
+    qrActions: {
         flexDirection: 'row',
-        justifyContent: 'center',
+        gap: SPACING.m,
+        marginTop: SPACING.l,
     },
-    barcodeButtonText: {
+    qrActionBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: RADIUS.m,
+        gap: 8,
+    },
+    qrActionText: {
         fontFamily: FONTS.bold,
-        fontSize: 16,
-        color: COLORS.surface,
+        fontSize: 14,
     },
     submitButton: {
-        backgroundColor: '#4E342E', // Dark brown
-        paddingVertical: 16,
-        borderRadius: RADIUS.xl,
-        flexDirection: 'row',
+        height: 60,
+        borderRadius: RADIUS.round,
         justifyContent: 'center',
         alignItems: 'center',
-        marginTop: SPACING.l,
+        marginTop: SPACING.xl,
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+    },
+    btnContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
     },
     submitText: {
         fontFamily: FONTS.bold,
         fontSize: 18,
-        color: COLORS.surface,
+        color: '#FFF',
     },
-    // Modal & Selection Styles
+    // Modal Styles
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(0,0,0,0.4)',
         justifyContent: 'flex-end',
     },
-    modalView: {
-        backgroundColor: COLORS.surface,
+    modalContent: {
         borderTopLeftRadius: RADIUS.xl,
         borderTopRightRadius: RADIUS.xl,
         padding: SPACING.xl,
-        maxHeight: '60%',
+        maxHeight: '70%',
     },
     modalHeader: {
         flexDirection: 'row',
@@ -719,94 +757,24 @@ const styles = StyleSheet.create({
     modalTitle: {
         fontFamily: FONTS.bold,
         fontSize: 20,
-        color: COLORS.text,
+    },
+    fieldsList: {
+        gap: SPACING.s,
     },
     fieldItem: {
-        paddingVertical: SPACING.m,
-        paddingHorizontal: SPACING.l,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
-        alignItems: 'flex-end',
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: SPACING.m,
+        borderRadius: RADIUS.m,
     },
-    selectedFieldItem: {
-        backgroundColor: '#F5F5F5',
-    },
-    fieldText: {
+    fieldItemText: {
         fontFamily: FONTS.medium,
         fontSize: 16,
-        color: COLORS.text,
     },
-    selectedFieldText: {
-        color: COLORS.primary,
-        fontFamily: FONTS.bold,
-    },
-    emptyText: {
-        fontFamily: FONTS.regular,
+    placeholderText: {
+        fontFamily: FONTS.medium,
         fontSize: 14,
-        color: COLORS.textSecondary,
-        textAlign: 'center',
-        marginTop: SPACING.xl,
+        marginTop: 4,
     },
-    // Cover Picker Styles
-    coverPickerSection: {
-        alignItems: 'center',
-        marginBottom: SPACING.l,
-    },
-    coverPreview: {
-        width: 120,
-        height: 180,
-        borderRadius: RADIUS.m,
-        backgroundColor: COLORS.surface,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        overflow: 'hidden',
-    },
-    coverImageStyle: {
-        width: '100%',
-        height: '100%',
-    },
-    coverPlaceholder: {
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    coverPlaceholderText: {
-        fontFamily: FONTS.medium,
-        fontSize: 12,
-        marginTop: SPACING.s,
-    },
-    cameraIconContainer: {
-        position: 'absolute',
-        bottom: 8,
-        right: 8,
-    },
-    cameraIconBadge: {
-        backgroundColor: COLORS.primary,
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: COLORS.surface,
-    },
-    pickerButtons: {
-        flexDirection: 'row',
-        marginTop: SPACING.m,
-        gap: SPACING.m,
-    },
-    miniPickerBtn: {
-        backgroundColor: COLORS.surface,
-        paddingHorizontal: SPACING.m,
-        paddingVertical: 6,
-        borderRadius: RADIUS.round,
-        borderWidth: 1,
-        borderColor: COLORS.primaryLight,
-    },
-    miniPickerText: {
-        fontFamily: FONTS.medium,
-        fontSize: 12,
-        color: COLORS.primary,
-    }
 });

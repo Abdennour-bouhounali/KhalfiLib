@@ -62,7 +62,7 @@ export default function StudentHomeScreen() {
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 <View style={styles.welcomeRow}>
                     <View>
-                        <Text style={[styles.welcomeText, { color: activeColors.text }]}>مرحباً، {currentUser?.name}</Text>
+                        <Text style={[styles.welcomeText, { color: activeColors.text }]}>سلام الله عليك {currentUser?.firstName}</Text>
                         <Text style={[styles.roleLabel, { color: activeColors.primary }]}>ركن المطالعة الخاص بك</Text>
                     </View>
                 </View>
@@ -107,7 +107,7 @@ export default function StudentHomeScreen() {
 
                             <View style={styles.subInfoRow}>
                                 <Text style={[styles.subInfoValue, { color: activeColors.text }]}>
-                                    {new Date(subscription.endDate).toLocaleDateString('ar-EG')}
+                                    {new Date(subscription.endDate).toLocaleDateString('en-UK')}
                                 </Text>
                                 <View style={styles.subLabelRow}>
                                     <Text style={[styles.subInfoLabel, { color: activeColors.textSecondary }]}>تاريخ الانتهاء</Text>
@@ -159,16 +159,22 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: SPACING.xl,
+        textAlign: 'center',
+
         paddingHorizontal: SPACING.s,
     },
     welcomeText: {
         fontFamily: FONTS.bold,
         fontSize: 22,
+        textAlign: 'center',
+        marginRight: SPACING.xxl,
     },
     roleLabel: {
         fontFamily: FONTS.medium,
         fontSize: 14,
-        textAlign: 'right',
+        textAlign: 'center',
+        marginRight: SPACING.xxl,
+
     },
     logoutButton: {
         padding: SPACING.s,
@@ -219,7 +225,7 @@ const styles = StyleSheet.create({
         fontFamily: FONTS.bold,
         fontSize: 16,
         marginBottom: SPACING.s,
-        textAlign: 'right'
+        textAlign: 'left'
     },
     infoItem: {
         marginBottom: SPACING.xs,
@@ -227,7 +233,7 @@ const styles = StyleSheet.create({
     infoText: {
         fontFamily: FONTS.regular,
         fontSize: 14,
-        textAlign: 'right'
+        textAlign: 'left'
     },
     subscriptionCard: {
         padding: SPACING.m,

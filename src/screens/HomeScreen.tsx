@@ -10,6 +10,7 @@ import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { BooksAPI, UsersAPI, BorrowingAPI } from '../services/database';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { formatNumber, formatDate } from '../utils/format';
 
 export default function HomeScreen() {
     const navigation = useNavigation<any>();
@@ -94,7 +95,7 @@ export default function HomeScreen() {
                             <div class="qr-item">
                                 <div class="title">${book.title}</div>
                                 <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${book.barcode}" width="100" height="100" />
-                                <div class="barcode">${book.barcode}</div>
+                                <div class="barcode">${formatNumber(book.barcode)}</div>
                             </div>
                         `).join('')}
                     </div>
@@ -127,23 +128,23 @@ export default function HomeScreen() {
                 </head>
                 <body>
                     <h1>تقرير الإحصائيات التفصيلي</h1>
-                    <div class="date">تاريخ التقرير: ${new Date().toLocaleDateString('ar-EG')}</div>
+                    <div class="date">تاريخ التقرير: ${formatDate(new Date())}</div>
                     
                     <div class="stat-row">
                         <div class="label">إجمالي الكتب في المكتبة:</div>
-                        <div class="value">${stats.books}</div>
+                        <div class="value">${formatNumber(stats.books)}</div>
                     </div>
                     <div class="stat-row">
                         <div class="label">إجمالي الطلاب المسجلين:</div>
-                        <div class="value">${stats.students}</div>
+                        <div class="value">${formatNumber(stats.students)}</div>
                     </div>
                     <div class="stat-row">
                         <div class="label">الكتب المستعارة حالياً:</div>
-                        <div class="value">${stats.borrowed}</div>
+                        <div class="value">${formatNumber(stats.borrowed)}</div>
                     </div>
                     <div class="stat-row">
                         <div class="label">الكتب المتأخرة عن الإرجاع:</div>
-                        <div class="value">${stats.overdue}</div>
+                        <div class="value">${formatNumber(stats.overdue)}</div>
                     </div>
                     
                     <div style="margin-top: 50px; text-align: center; color: #999; font-size: 12px;">
@@ -192,7 +193,7 @@ export default function HomeScreen() {
                                 <tr>
                                     <td>${b.title}</td>
                                     <td>${b.author}</td>
-                                    <td>${b.barcode}</td>
+                                    <td>${formatNumber(b.barcode)}</td>
                                     <td>${b.copiesAvailable > 0 ? 'متوفر' : 'مستعار'}</td>
                                 </tr>
                             `).join('')}
@@ -241,8 +242,8 @@ export default function HomeScreen() {
                             ${students.map(s => `
                                 <tr>
                                     <td>${s.name || `${s.firstName || ''} ${s.lastName || ''}`}</td>
-                                    <td>${s.phone}</td>
-                                    <td>${s.previousBooksCount || 0}</td>
+                                    <td>${formatNumber(s.phone)}</td>
+                                    <td>${formatNumber(s.previousBooksCount || 0)}</td>
                                     <td>${s.borrowedBookId ? 'كتاب واحد' : 'لا يوجد'}</td>
                                 </tr>
                             `).join('')}
@@ -293,7 +294,7 @@ export default function HomeScreen() {
                     <Card style={[styles.statCard, { backgroundColor: activeColors.surface, borderColor: isDarkMode ? activeColors.border : 'transparent' }]}>
                         <Book color={activeColors.primary} size={32} />
                         {loading ? <ActivityIndicator size="small" color={activeColors.primary} style={{ marginTop: 8 }} /> : (
-                            <Text style={[styles.statNumber, { color: activeColors.text }]}>{stats.books}</Text>
+                            <Text style={[styles.statNumber, { color: activeColors.text }]}>{formatNumber(stats.books)}</Text>
                         )}
                         <Text style={[styles.statLabel, { color: activeColors.textSecondary }]}>إجمالي الكتب</Text>
                     </Card>
@@ -301,7 +302,7 @@ export default function HomeScreen() {
                     <Card style={[styles.statCard, { backgroundColor: activeColors.surface, borderColor: isDarkMode ? activeColors.border : 'transparent' }]}>
                         <Users color={activeColors.primary} size={32} />
                         {loading ? <ActivityIndicator size="small" color={activeColors.primary} style={{ marginTop: 8 }} /> : (
-                            <Text style={[styles.statNumber, { color: activeColors.text }]}>{stats.students}</Text>
+                            <Text style={[styles.statNumber, { color: activeColors.text }]}>{formatNumber(stats.students)}</Text>
                         )}
                         <Text style={[styles.statLabel, { color: activeColors.textSecondary }]}>إجمالي الطلاب</Text>
                     </Card>
@@ -309,7 +310,7 @@ export default function HomeScreen() {
                     <Card style={[styles.statCard, { backgroundColor: activeColors.surface, borderColor: isDarkMode ? activeColors.border : 'transparent' }]}>
                         <BookOpen color={activeColors.primary} size={32} />
                         {loading ? <ActivityIndicator size="small" color={activeColors.primary} style={{ marginTop: 8 }} /> : (
-                            <Text style={[styles.statNumber, { color: activeColors.text }]}>{stats.borrowed}</Text>
+                            <Text style={[styles.statNumber, { color: activeColors.text }]}>{formatNumber(stats.borrowed)}</Text>
                         )}
                         <Text style={[styles.statLabel, { color: activeColors.textSecondary }]}>الكتب المستعارة</Text>
                     </Card>
@@ -322,7 +323,7 @@ export default function HomeScreen() {
                         <AlertTriangle color={stats.overdue > 0 ? activeColors.danger : activeColors.textTertiary} size={32} />
                         {loading ? <ActivityIndicator size="small" color={activeColors.primary} style={{ marginTop: 8 }} /> : (
                             <Text style={[styles.statNumber, { color: stats.overdue > 0 ? activeColors.danger : activeColors.text }]}>
-                                {stats.overdue}
+                                {formatNumber(stats.overdue)}
                             </Text>
                         )}
                         <Text style={[styles.statLabel, { color: activeColors.textSecondary }]}>الكتب المتأخرة</Text>

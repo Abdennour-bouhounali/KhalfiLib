@@ -50,20 +50,21 @@ function MainTabNavigator() {
     return (
         <Tab.Navigator
             tabBar={(props) => <FloatingTabBar {...props} />}
+            initialRouteName="Home"
             screenOptions={{
                 headerShown: false,
                 tabBarHideOnKeyboard: true,
             }}
         >
             <Tab.Screen
-                name="Settings"
-                component={SettingsScreen}
-                options={{ tabBarLabel: 'الإعدادات' }}
+                name="Home"
+                component={HomeScreen}
+                options={{ tabBarLabel: 'الرئيسية' }}
             />
             <Tab.Screen
-                name="Security"
-                component={StudentsScreen}
-                options={{ tabBarLabel: 'الطلاب' }}
+                name="LibraryChat"
+                component={LibraryChatScreen}
+                options={{ tabBarLabel: 'نقاش المكتبة', tabBarStyle: { display: 'none' } }}
             />
             <Tab.Screen
                 name="Library"
@@ -71,15 +72,14 @@ function MainTabNavigator() {
                 options={{ tabBarLabel: 'المكتبة' }}
             />
             <Tab.Screen
-                name="LibraryChat"
-                component={LibraryChatScreen}
-                options={{ tabBarLabel: 'نقاش المكتبة' }}
+                name="Security"
+                component={StudentsScreen}
+                options={{ tabBarLabel: 'الطلاب' }}
             />
-
             <Tab.Screen
-                name="Home"
-                component={HomeScreen}
-                options={{ tabBarLabel: 'الرئيسية' }}
+                name="Settings"
+                component={SettingsScreen}
+                options={{ tabBarLabel: 'الإعدادات' }}
             />
             {/* Hidden Management Screens */}
             <Tab.Screen name="Books" component={BooksScreen} options={{ tabBarItemStyle: { display: 'none' } }} />
@@ -98,15 +98,26 @@ function SuperAdminTabNavigator() {
     return (
         <SuperAdminTab.Navigator
             tabBar={(props) => <FloatingTabBar {...props} />}
+            initialRouteName="Home"
             screenOptions={{
                 headerShown: false,
                 tabBarHideOnKeyboard: true,
             }}
         >
             <SuperAdminTab.Screen
-                name="Settings"
-                component={SettingsScreen}
-                options={{ tabBarLabel: 'الإعدادات' }}
+                name="Home"
+                component={SuperAdminDashboard}
+                options={{ tabBarLabel: 'الرئيسية' }}
+            />
+            <SuperAdminTab.Screen
+                name="PublicCatalog"
+                component={PublicCatalogScreen}
+                options={{ tabBarLabel: 'الكتب' }}
+            />
+            <SuperAdminTab.Screen
+                name="LibraryChat"
+                component={LibraryChatScreen}
+                options={{ tabBarLabel: 'نقاش المكتبة', tabBarStyle: { display: 'none' } }}
             />
             <SuperAdminTab.Screen
                 name="Security"
@@ -114,21 +125,9 @@ function SuperAdminTabNavigator() {
                 options={{ tabBarLabel: 'المسؤولين' }}
             />
             <SuperAdminTab.Screen
-                name="LibraryChat"
-                component={LibraryChatScreen}
-                options={{ tabBarLabel: 'نقاش المكتبة' }}
-            />
-
-
-            <SuperAdminTab.Screen
-                name="PublicCatalog"
-                component={PublicCatalogScreen}
-                options={{ tabBarLabel: 'الكتب' }}
-            />
-            <SuperAdminTab.Screen
-                name="Home"
-                component={SuperAdminDashboard}
-                options={{ tabBarLabel: 'الرئيسية' }}
+                name="Settings"
+                component={SettingsScreen}
+                options={{ tabBarLabel: 'الإعدادات' }}
             />
         </SuperAdminTab.Navigator>
     );
@@ -142,6 +141,7 @@ function StudentTabNavigator() {
     return (
         <StudentTab.Navigator
             tabBar={(props) => <FloatingTabBar {...props} />}
+            initialRouteName="Home"
             screenOptions={{
                 headerShown: false,
                 tabBarHideOnKeyboard: true,
@@ -153,14 +153,9 @@ function StudentTabNavigator() {
                 options={{ tabBarLabel: 'الرئيسية' }}
             />
             <StudentTab.Screen
-                name="Security"
-                component={AccountStatusScreen}
-                options={{ tabBarLabel: 'حسابي' }}
-            />
-            <StudentTab.Screen
                 name="LibraryChat"
                 component={LibraryChatScreen}
-                options={{ tabBarLabel: 'نقاش المكتبة' }}
+                options={{ tabBarLabel: 'نقاش المكتبة', tabBarStyle: { display: 'none' } }}
             />
             <StudentTab.Screen
                 name="Settings"
@@ -191,7 +186,13 @@ export default function AppNavigator() {
     }
 
     return (
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Navigator
+            screenOptions={{
+                headerShown: false,
+                gestureEnabled: true,
+                animation: 'slide_from_right',
+            }}
+        >
             {user === null ? (
                 // Guest / Unauthenticated Stack
                 <>

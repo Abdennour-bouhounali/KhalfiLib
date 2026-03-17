@@ -169,7 +169,7 @@ export default function BorrowReturnScreen() {
     return (
         <View style={[styles.container, { backgroundColor: activeColors.background }]}>
             <View style={[styles.topBackground, { backgroundColor: isDarkMode ? activeColors.surface : COLORS.primaryLight }]}>
-                <Header title="الاستعارة والإرجاع" showSearch={false} showNotification={false} />
+                <Header title="الاستعارة والإرجاع" showSearch={false} showNotification={false} showBack={true} />
             </View>
 
             {/* Mode Selector */}

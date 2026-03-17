@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Image } from 'react-native';
-import { ChevronLeft, Edit3, Trash2, Calendar, Book as BookIcon, Hash, Building2, User, Printer, Star, QrCode, MessageCircle } from 'lucide-react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Image, Animated } from 'react-native';
+import { ChevronLeft, Edit3, Trash2, Calendar, Book as BookIcon, Hash, Building2, User, Printer, Star, QrCode, MessageCircle, Layers, ChevronRight } from 'lucide-react-native';
 import * as Print from 'expo-print';
 import QRCode from 'react-native-qrcode-svg';
 import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
@@ -11,6 +11,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { BooksAPI, Book } from '../services/database';
 import { useAuth } from '../context/AuthContext';
+import Card from '../components/Card';
+import { formatNumber } from '../utils/format';
 
 export default function BookDetailsScreen() {
     const { user } = useAuth();
@@ -24,6 +26,17 @@ export default function BookDetailsScreen() {
 
     const [book, setBook] = useState<Book | null>(null);
     const [loading, setLoading] = useState(true);
+    const fadeAnim = useState(new Animated.Value(0))[0];
+
+    useEffect(() => {
+        if (!loading && book) {
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 600,
+                useNativeDriver: true,
+            }).start();
+        }
+    }, [loading, book]);
 
     useEffect(() => {
         if (isFocused) {
@@ -113,7 +126,7 @@ export default function BookDetailsScreen() {
             <View style={[styles.topBackground, { backgroundColor: isDarkMode ? activeColors.surface : COLORS.primaryLight }]}>
                 <View style={[styles.header, { paddingTop: insets.top + SPACING.s }]}>
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                        <ChevronLeft color={activeColors.text} size={24} />
+                        <ChevronRight color={activeColors.text} size={24} />
                     </TouchableOpacity>
                     <Text style={[styles.headerTitle, { color: activeColors.text }]}>تفاصيل الكتاب</Text>
                     <View style={{ width: 40 }} />
@@ -121,111 +134,139 @@ export default function BookDetailsScreen() {
             </View>
 
             <ScrollView contentContainerStyle={styles.content}>
+                <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }}>
+                    {/* Top Section: Cover & Title */}
+                    <View style={styles.topSection}>
+                        <View style={[styles.coverContainer, { shadowColor: activeColors.text }]}>
+                            {book.coverImage ? (
+                                <Image source={{ uri: book.coverImage }} style={styles.coverImage} resizeMode="cover" />
+                            ) : (
+                                <View style={[styles.coverPlaceholder, { backgroundColor: isDarkMode ? activeColors.background : '#F0F0F0' }]}>
+                                    <BookIcon size={80} color={activeColors.textTertiary} />
+                                </View>
+                            )}
+                        </View>
 
-                <View style={[styles.card, { backgroundColor: activeColors.surface }]}>
-                    <View style={styles.infoRow}>
-                        <BookIcon color={activeColors.primary} size={24} />
-                        <View style={styles.infoText}>
-                            <Text style={[styles.label, { color: activeColors.textSecondary }]}>العنوان</Text>
-                            <Text style={[styles.value, { color: activeColors.text }]}>{book.title}</Text>
+                        <View style={styles.titleSection}>
+                            <Text style={[styles.bookTitle, { color: activeColors.text }]}>{book.title}</Text>
+                            <View style={styles.authorRow}>
+                                <User color={activeColors.primary} size={18} />
+                                <Text style={[styles.authorName, { color: activeColors.textSecondary }]}>{book.author}</Text>
+                            </View>
                         </View>
                     </View>
 
-                    <View style={styles.infoRow}>
-                        <User color={activeColors.primary} size={24} />
-                        <View style={styles.infoText}>
-                            <Text style={[styles.label, { color: activeColors.textSecondary }]}>المؤلف</Text>
-                            <Text style={[styles.value, { color: activeColors.text }]}>{book.author}</Text>
+                    {/* Status & Quick Actions Card */}
+                    <Card style={styles.statusCard}>
+                        <View style={styles.statusRow}>
+                            <View style={[styles.statusBadge, { backgroundColor: book.copiesAvailable > 0 ? activeColors.success + '20' : activeColors.danger + '20' }]}>
+                                <View style={[styles.statusDot, { backgroundColor: book.copiesAvailable > 0 ? activeColors.success : activeColors.danger }]} />
+                                <Text style={[styles.statusText, { color: book.copiesAvailable > 0 ? activeColors.success : activeColors.danger }]}>
+                                    {book.copiesAvailable > 0 ? 'متاح للاستعارة' : 'غير متاح حالياً'}
+                                </Text>
+                            </View>
+                            <View style={styles.copiesInfo}>
+                                <Layers size={18} color={activeColors.textTertiary} />
+                                <Text style={[styles.copiesText, { color: activeColors.textSecondary }]}>
+                                    {formatNumber(book.copiesAvailable)} من {formatNumber(book.copiesTotal)} نسخة
+                                </Text>
+                            </View>
                         </View>
+
+                        <View style={styles.primaryActions}>
+
+
+                            <TouchableOpacity
+                                style={[styles.discussButton, { borderColor: activeColors.primary }]}
+                                onPress={() => navigation.navigate('BookChat', { bookId: book.id! })}
+                            >
+                                <MessageCircle color={activeColors.primary} size={20} />
+                                <Text style={[styles.discussButtonText, { color: activeColors.primary }]}>نقاش الكتاب</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </Card>
+
+                    {/* Info Grid Section */}
+                    <View style={styles.infoGrid}>
+                        <Card style={styles.gridCard}>
+                            <Building2 color={activeColors.primary} size={22} />
+                            <Text style={[styles.gridLabel, { color: activeColors.textTertiary }]}>دار النشر</Text>
+                            <Text style={[styles.gridValue, { color: activeColors.text }]} numberOfLines={1}>
+                                {book.publisher || 'غير محدد'}
+                            </Text>
+                        </Card>
+
+                        <Card style={styles.gridCard}>
+                            <Calendar color={activeColors.primary} size={22} />
+                            <Text style={[styles.gridLabel, { color: activeColors.textTertiary }]}>الفئة العمرية</Text>
+                            <Text style={[styles.gridValue, { color: activeColors.text }]}>{book.ageCategory}</Text>
+                        </Card>
                     </View>
 
-                    <View style={styles.infoRow}>
-                        <Building2 color={activeColors.primary} size={24} />
-                        <View style={styles.infoText}>
-                            <Text style={[styles.label, { color: activeColors.textSecondary }]}>دار النشر</Text>
-                            <Text style={[styles.value, { color: activeColors.text }]}>{book.publisher || 'غير محدد'}</Text>
+                    {/* Description Section */}
+                    <Card style={styles.descriptionCard}>
+                        <View style={styles.sectionHeader}>
+                            <Hash color={activeColors.primary} size={20} />
+                            <Text style={[styles.sectionTitle, { color: activeColors.text }]}>وصف الكتاب</Text>
                         </View>
-                    </View>
+                        <Text style={[styles.bookDescription, { color: activeColors.textSecondary }]}>
+                            {book.description || 'لا يوجد وصف متاح لهذا الكتاب حالياً.'}
+                        </Text>
+                    </Card>
 
-                    <View style={styles.infoRow}>
-                        <QrCode color={activeColors.primary} size={24} />
-                        <View style={styles.infoText}>
-                            <View style={styles.rowBetween}>
-                                <Text style={[styles.label, { color: activeColors.textSecondary }]}>رمز QR</Text>
-                                <TouchableOpacity onPress={handlePrintBarcode} style={[styles.printIconBtn, { backgroundColor: isDarkMode ? activeColors.background : COLORS.primaryLight }]}>
-                                    <Printer color={activeColors.primary} size={18} />
+                    {/* Barcode / QR Section */}
+                    <Card style={styles.qrCard}>
+                        <View style={styles.sectionHeader}>
+                            <QrCode color={activeColors.primary} size={20} />
+                            <Text style={[styles.sectionTitle, { color: activeColors.text }]}>رمز الاستعارة السريع</Text>
+                        </View>
+                        <View style={styles.qrContent}>
+                            {book.barcode ? (
+                                <>
+                                    <View style={styles.qrWrapper}>
+                                        <QRCode value={book.barcode} size={140} />
+                                    </View>
+                                    <Text style={[styles.barcodeText, { color: activeColors.text }]}>{formatNumber(book.barcode)}</Text>
+                                    <TouchableOpacity
+                                        style={[styles.printIconButton, { backgroundColor: activeColors.background }]}
+                                        onPress={handlePrintBarcode}
+                                    >
+                                        <Printer color={activeColors.primary} size={20} />
+                                        <Text style={[styles.printBtnText, { color: activeColors.primary }]}>طباعة الرمز</Text>
+                                    </TouchableOpacity>
+                                </>
+                            ) : (
+                                <Text style={[styles.emptyText, { color: activeColors.textTertiary }]}>لا يوجد رمز متاح</Text>
+                            )}
+                        </View>
+                    </Card>
+
+                    {/* Admin Actions */}
+                    {(user?.role === 'admin' || user?.role === 'super_admin') && (
+                        <View style={styles.adminSection}>
+                            <Text style={[styles.adminTitle, { color: activeColors.textTertiary }]}>خيارات الإدارة</Text>
+                            <View style={styles.adminButtons}>
+                                <TouchableOpacity
+                                    style={[styles.adminBtn, { backgroundColor: activeColors.primary + '10' }]}
+                                    onPress={() => navigation.navigate('AddBook', { bookId: book.id })}
+                                >
+                                    <Edit3 color={activeColors.primary} size={20} />
+                                    <Text style={[styles.adminBtnText, { color: activeColors.primary }]}>تعديل البيانات</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[styles.adminBtn, { backgroundColor: activeColors.danger + '10' }]}
+                                    onPress={handleDelete}
+                                >
+                                    <Trash2 color={activeColors.danger} size={20} />
+                                    <Text style={[styles.adminBtnText, { color: activeColors.danger }]}>حذف الكتاب</Text>
                                 </TouchableOpacity>
                             </View>
-                            <View style={[styles.barcodeDisplay, { backgroundColor: isDarkMode ? activeColors.background : '#f9f9f9' }]}>
-                                {book.barcode ? (
-                                    <>
-                                        <View style={{ backgroundColor: 'white', padding: 5, borderRadius: 5 }}>
-                                            <QRCode value={book.barcode} size={100} />
-                                        </View>
-                                        <Text style={[styles.value, { color: activeColors.text }]}>{book.barcode}</Text>
-                                    </>
-                                ) : (
-                                    <Text style={[styles.value, { color: activeColors.textTertiary, fontSize: 14 }]}>
-                                        لا يوجد رمز QR متاح
-                                    </Text>
-                                )}
-                            </View>
                         </View>
-                    </View>
+                    )}
 
-                    <View style={styles.infoRow}>
-                        <Star color={activeColors.warning} size={24} fill={activeColors.warning} />
-                        <View style={styles.infoText}>
-                            <Text style={[styles.label, { color: activeColors.textSecondary }]}>التقييم</Text>
-                            <Text style={[styles.value, { color: activeColors.text }]}>{book.rating || 0} / 10</Text>
-                        </View>
-                    </View>
-
-                    <View style={[styles.statsRow, { borderColor: activeColors.border }]}>
-                        <View style={styles.statItem}>
-                            <Text style={[styles.statLabel, { color: activeColors.textSecondary }]}>إجمالي النسخ</Text>
-                            <Text style={[styles.statValue, { color: activeColors.text }]}>{book.copiesTotal}</Text>
-                        </View>
-                        <View style={styles.statItem}>
-                            <Text style={[styles.statLabel, { color: activeColors.textSecondary }]}>المتاح</Text>
-                            <Text style={[styles.statValue, { color: book.copiesAvailable > 0 ? activeColors.primary : activeColors.danger }]}>
-                                {book.copiesAvailable}
-                            </Text>
-                        </View>
-                    </View>
-
-                    <View style={styles.infoRow}>
-                        <Calendar color={activeColors.primary} size={24} />
-                        <View style={styles.infoText}>
-                            <Text style={[styles.label, { color: activeColors.textSecondary }]}>الفئة العمرية</Text>
-                            <Text style={[styles.value, { color: activeColors.text }]}>{book.ageCategory}</Text>
-                        </View>
-                    </View>
-
-                    <Text style={[styles.descriptionLabel, { color: activeColors.text }]}>الوصف</Text>
-                    <Text style={[styles.descriptionText, { color: activeColors.textSecondary }]}>{book.description || 'لا يوجد وصف متاح'}</Text>
-                </View>
-
-
-                {(user?.role === 'admin' || user?.role === 'super_admin') && (
-                    <View style={styles.actions}>
-                        <TouchableOpacity
-                            style={[styles.actionButton, styles.editButton, { backgroundColor: activeColors.primary }]}
-                            onPress={() => navigation.navigate('AddBook', { bookId: book.id })}
-                        >
-                            <Edit3 color={activeColors.surface} size={20} />
-                            <Text style={[styles.actionButtonText, { color: activeColors.surface }]}>تعديل</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.actionButton, styles.deleteButton]}
-                            onPress={handleDelete}
-                        >
-                            <Trash2 color={activeColors.surface} size={20} />
-                            <Text style={[styles.actionButtonText, { color: activeColors.surface }]}>حذف</Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
+                    <View style={{ height: 40 }} />
+                </Animated.View>
             </ScrollView>
         </View>
     );
@@ -234,7 +275,6 @@ export default function BookDetailsScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: COLORS.background,
     },
     centerContainer: {
         flex: 1,
@@ -242,15 +282,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     header: {
-        flexDirection: 'row-reverse',
+        flexDirection: 'row', // Use row for RTL naturally
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: SPACING.m,
         paddingBottom: SPACING.m,
     },
     topBackground: {
-        backgroundColor: COLORS.primaryLight,
-        paddingBottom: 0,
         borderBottomLeftRadius: RADIUS.xl,
         borderBottomRightRadius: RADIUS.xl,
     },
@@ -259,142 +297,233 @@ const styles = StyleSheet.create({
         height: 40,
         justifyContent: 'center',
         alignItems: 'center',
+        borderRadius: 20,
     },
     headerTitle: {
         fontFamily: FONTS.bold,
         fontSize: 18,
-        color: COLORS.text,
     },
     content: {
         padding: SPACING.m,
-        paddingBottom: 100,
+        paddingBottom: 40,
     },
-    card: {
-        backgroundColor: COLORS.surface,
-        borderRadius: RADIUS.l,
-        padding: SPACING.l,
-        shadowColor: COLORS.shadow,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-        elevation: 4,
+    topSection: {
+        alignItems: 'center',
+        marginBottom: SPACING.xl,
     },
     coverContainer: {
-        width: '100%',
-        height: 300,
-        marginBottom: SPACING.l,
+        width: 180,
+        height: 260,
         borderRadius: RADIUS.l,
         overflow: 'hidden',
-        backgroundColor: 'rgba(0,0,0,0.05)',
+        elevation: 10,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.2,
+        shadowRadius: 15,
+        backgroundColor: '#FFF',
     },
     coverImage: {
         width: '100%',
         height: '100%',
     },
-    infoRow: {
-        flexDirection: 'row',
+    coverPlaceholder: {
+        flex: 1,
+        justifyContent: 'center',
         alignItems: 'center',
+    },
+    titleSection: {
+        alignItems: 'center',
+        marginTop: SPACING.l,
+        paddingHorizontal: SPACING.m,
+    },
+    bookTitle: {
+        fontFamily: FONTS.bold,
+        fontSize: 24,
+        textAlign: 'center',
+        marginBottom: 8,
+    },
+    authorRow: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        gap: 6,
+    },
+    authorName: {
+        fontFamily: FONTS.medium,
+        fontSize: 16,
+    },
+    statusCard: {
+        padding: SPACING.l,
         marginBottom: SPACING.m,
     },
-    infoText: {
-        marginRight: SPACING.m,
-        flex: 1,
-    },
-    label: {
-        fontFamily: FONTS.medium,
-        fontSize: 12,
-        color: COLORS.textSecondary,
-        textAlign: 'right',
-    },
-    value: {
-        fontFamily: FONTS.bold,
-        fontSize: 16,
-        color: COLORS.text,
-        textAlign: 'right',
-        marginTop: 2,
-    },
-    statsRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginVertical: SPACING.m,
-        paddingVertical: SPACING.m,
-        borderTopWidth: 1,
-        borderBottomWidth: 1,
-        borderColor: COLORS.border,
-    },
-    statItem: {
-        alignItems: 'center',
-        flex: 1,
-    },
-    rowBetween: {
+    statusRow: {
         flexDirection: 'row-reverse',
         justifyContent: 'space-between',
         alignItems: 'center',
+        marginBottom: SPACING.l,
     },
-    printIconBtn: {
-        padding: 4,
-        backgroundColor: COLORS.primaryLight,
-        borderRadius: RADIUS.s,
-    },
-    barcodeDisplay: {
+    statusBadge: {
+        flexDirection: 'row-reverse',
         alignItems: 'center',
-        marginTop: SPACING.s,
-        backgroundColor: '#f9f9f9',
-        padding: SPACING.s,
-        borderRadius: RADIUS.m,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: RADIUS.round,
+        gap: 8,
     },
-    statLabel: {
+    statusDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    statusText: {
+        fontFamily: FONTS.bold,
+        fontSize: 14,
+    },
+    copiesInfo: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        gap: 6,
+    },
+    copiesText: {
         fontFamily: FONTS.medium,
-        fontSize: 12,
-        color: COLORS.textSecondary,
-    },
-    statValue: {
-        fontFamily: FONTS.bold,
-        fontSize: 20,
-        color: COLORS.text,
-        marginTop: 4,
-    },
-    descriptionLabel: {
-        fontFamily: FONTS.bold,
         fontSize: 14,
-        color: COLORS.text,
-        textAlign: 'right',
-        marginTop: SPACING.m,
-        marginBottom: SPACING.s,
     },
-    descriptionText: {
-        fontFamily: FONTS.regular,
-        fontSize: 14,
-        color: COLORS.textSecondary,
-        textAlign: 'right',
-        lineHeight: 22,
+    primaryActions: {
+        flexDirection: 'column',
+        gap: SPACING.m,
     },
-    actions: {
+    mainActionButton: {
+        height: 52,
+        borderRadius: RADIUS.m,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 2,
+    },
+    mainActionText: {
+        fontFamily: FONTS.bold,
+        color: '#FFF',
+        fontSize: 16,
+    },
+    discussButton: {
+        height: 52,
+        borderRadius: RADIUS.m,
+        flexDirection: 'row-reverse',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1.5,
+        gap: 10,
+    },
+    discussButtonText: {
+        fontFamily: FONTS.bold,
+        fontSize: 16,
+    },
+    infoGrid: {
         flexDirection: 'row-reverse',
         gap: SPACING.m,
-        marginBottom: SPACING.xl,
+        marginBottom: SPACING.m,
     },
-    actionButton: {
+    gridCard: {
         flex: 1,
+        alignItems: 'center',
+        padding: SPACING.m,
+    },
+    gridLabel: {
+        fontFamily: FONTS.medium,
+        fontSize: 12,
+        marginTop: 6,
+        marginBottom: 2,
+    },
+    gridValue: {
+        fontFamily: FONTS.bold,
+        fontSize: 14,
+        textAlign: 'center',
+    },
+    descriptionCard: {
+        padding: SPACING.l,
+        marginBottom: SPACING.m,
+    },
+    sectionHeader: {
         flexDirection: 'row-reverse',
         alignItems: 'center',
-        justifyContent: 'center',
-        padding: SPACING.m,
-        borderRadius: RADIUS.m,
-        gap: SPACING.s,
+        marginBottom: SPACING.m,
+        gap: 8,
     },
-    chatButton: {
+    sectionTitle: {
+        fontFamily: FONTS.bold,
+        fontSize: 17,
+    },
+    bookDescription: {
+        fontFamily: FONTS.regular,
+        fontSize: 15,
+        lineHeight: 24,
+        textAlign: 'right',
+    },
+    qrCard: {
+        padding: SPACING.l,
+        marginBottom: SPACING.xl,
+        alignItems: 'center',
+    },
+    qrContent: {
+        alignItems: 'center',
         width: '100%',
     },
-    editButton: {
-        backgroundColor: COLORS.primary,
+    qrWrapper: {
+        backgroundColor: '#FFF',
+        padding: 15,
+        borderRadius: RADIUS.m,
+        marginBottom: SPACING.m,
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 5,
     },
-    deleteButton: {
-        backgroundColor: COLORS.danger,
-    },
-    actionButtonText: {
+    barcodeText: {
         fontFamily: FONTS.bold,
         fontSize: 16,
-        color: COLORS.surface,
+        letterSpacing: 2,
+        marginBottom: SPACING.l,
     },
+    printIconButton: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: RADIUS.round,
+        gap: 8,
+    },
+    printBtnText: {
+        fontFamily: FONTS.bold,
+        fontSize: 14,
+    },
+    adminSection: {
+        marginTop: SPACING.l,
+    },
+    adminTitle: {
+        fontFamily: FONTS.bold,
+        fontSize: 14,
+        marginBottom: SPACING.m,
+        textAlign: 'right',
+        marginRight: 4,
+    },
+    adminButtons: {
+        flexDirection: 'row-reverse',
+        gap: SPACING.m,
+    },
+    adminBtn: {
+        flex: 1,
+        height: 50,
+        borderRadius: RADIUS.m,
+        flexDirection: 'row-reverse',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 8,
+    },
+    adminBtnText: {
+        fontFamily: FONTS.bold,
+        fontSize: 14,
+    },
+    emptyText: {
+        fontFamily: FONTS.medium,
+        fontSize: 14,
+    }
 });

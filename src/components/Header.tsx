@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image } from 'react-native';
-import { Search, Bell, BookOpen, LogOut } from 'lucide-react-native';
+import { Search, Bell, BookOpen, LogOut, ArrowRight } from 'lucide-react-native';
 import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +20,8 @@ interface HeaderProps {
     showLogo?: boolean;
     showLogout?: boolean;
     onLogout?: () => void;
+    showBack?: boolean;
+    onBackPress?: () => void;
 }
 
 export default function Header({
@@ -34,7 +36,9 @@ export default function Header({
     searchPlaceholder = 'ابحث هنا...',
     showLogo = false,
     showLogout = false,
-    onLogout
+    onLogout,
+    showBack = false,
+    onBackPress
 }: HeaderProps) {
     const navigation = useNavigation<any>();
     const { isDarkMode } = useTheme();
@@ -70,42 +74,48 @@ export default function Header({
                 </View>
             ) : (
                 <>
-                    {/* Right Corner (in RTL): Logo + Title/Notification Group */}
-                    <View style={styles.brandingGroup}>
-                        {showLogo ? (
-                            <Image
-                                source={require('../../assets/logo.png')}
-                                style={styles.logoImage}
-                                resizeMode="contain"
-                            />
-                        ) : (
-                            showSearch ? (
-                                <TouchableOpacity style={styles.iconButton} onPress={onSearchPress}>
-                                    <Search color={activeColors.text} size={24} />
-                                </TouchableOpacity>
-                            ) : <View style={{ width: 40 }} />
-                        )}
-
-                        <View style={styles.titleContainer}>
-                            <Text style={[styles.title, { color: activeColors.text }]} numberOfLines={1}>{title}</Text>
-                            {showNotification && (
-                                <TouchableOpacity style={styles.notificationButton} onPress={handleNotificationPress}>
-                                    <Bell color={activeColors.text} size={20} />
-                                    <View style={[styles.badge, { backgroundColor: activeColors.primaryLight }]} />
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    </View>
-
-                    {/* Left Corner: Logout or Corporate Book Icon */}
-                    <View style={styles.leftCorner}>
-                        {showLogout ? (
+                    {/* Logout / Back Button (TOP RIGHT in RTL) */}
+                    <View style={styles.rightCorner}>
+                        {showBack ? (
+                            <TouchableOpacity
+                                style={styles.backButton}
+                                onPress={onBackPress || (() => navigation.goBack())}
+                            >
+                                <ArrowRight color={activeColors.text} size={24} />
+                            </TouchableOpacity>
+                        ) : showLogout ? (
                             <TouchableOpacity
                                 style={[styles.logoutButton, isDarkMode && { backgroundColor: '#3D1C1C' }]}
                                 onPress={onLogout}
                             >
                                 <LogOut color={isDarkMode ? '#FF5252' : COLORS.danger} size={20} />
                             </TouchableOpacity>
+                        ) : !showLogo && (
+                            <TouchableOpacity style={styles.iconButton} onPress={onSearchPress}>
+                                <Search color={activeColors.text} size={24} />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    {/* Branding Group (Center/Title) */}
+                    <View style={styles.titleContainer}>
+                        <Text style={[styles.title, { color: activeColors.text }]} numberOfLines={1}>{title}</Text>
+                        {showNotification && (
+                            <TouchableOpacity style={styles.notificationButton} onPress={handleNotificationPress}>
+                                <Bell color={activeColors.text} size={20} />
+                                <View style={[styles.badge, { backgroundColor: activeColors.primaryLight }]} />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    {/* Logo (TOP LEFT in RTL) */}
+                    <View style={styles.leftCorner}>
+                        {showLogo ? (
+                            <Image
+                                source={require('../../assets/logo.png')}
+                                style={styles.logoImage}
+                                resizeMode="contain"
+                            />
                         ) : (
                             <View style={[styles.logoContainer, isDarkMode && { backgroundColor: '#1A3A37' }]}>
                                 <BookOpen color={activeColors.primary} size={24} />
@@ -133,6 +143,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: SPACING.m,
     },
+    rightCorner: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        minWidth: 42,
+    },
     titleContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -143,10 +158,17 @@ const styles = StyleSheet.create({
     leftCorner: {
         justifyContent: 'center',
         alignItems: 'center',
+        minWidth: 42,
     },
     iconButton: {
         padding: SPACING.xs,
         position: 'relative',
+    },
+    backButton: {
+        width: 42,
+        height: 42,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     badge: {
         position: 'absolute',

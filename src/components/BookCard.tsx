@@ -8,6 +8,7 @@ import Card from './Card';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
+import { formatNumber } from '../utils/format';
 
 export interface BookProps {
     id: string;
@@ -17,7 +18,7 @@ export interface BookProps {
     copiesAvailable: number;
     ageCategory: string;
     rating: number;
-    status: 'available' | 'low' | 'unavailable';
+    status: 'available' | 'unavailable';
     coverImage?: string;
 }
 
@@ -34,7 +35,6 @@ export default function BookCard({ book, onPress }: BookCardProps) {
     const getStatusColor = () => {
         switch (book.status) {
             case 'available': return activeColors.success;
-            case 'low': return activeColors.warning;
             case 'unavailable': return activeColors.danger;
             default: return activeColors.textTertiary;
         }
@@ -43,7 +43,6 @@ export default function BookCard({ book, onPress }: BookCardProps) {
     const getStatusText = () => {
         switch (book.status) {
             case 'available': return 'متاح';
-            case 'low': return 'نسخ قليلة';
             case 'unavailable': return 'غير متاح';
             default: return '';
         }
@@ -75,7 +74,7 @@ export default function BookCard({ book, onPress }: BookCardProps) {
 
                     <View style={styles.detailsGrid}>
                         <View style={styles.iconRow}>
-                            <Text style={[styles.detailText, { color: activeColors.textSecondary }]}>{book.copiesAvailable} نسخة باقي</Text>
+                            <Text style={[styles.detailText, { color: activeColors.textSecondary }]}>{formatNumber(book.copiesAvailable)} نسخة باقي</Text>
                             <Layers color={activeColors.textSecondary} size={14} style={styles.icon} />
                         </View>
                         <View style={styles.iconRow}>
@@ -106,7 +105,7 @@ export default function BookCard({ book, onPress }: BookCardProps) {
                         </View>
 
                         <View style={styles.ratingContainer}>
-                            <Text style={[styles.ratingText, { color: activeColors.text }]}>{book.rating}</Text>
+                            <Text style={[styles.ratingText, { color: activeColors.text }]}>{formatNumber(book.rating)}</Text>
                             <Star color={activeColors.warning} size={14} fill={activeColors.warning} />
                         </View>
                     </View>

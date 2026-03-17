@@ -7,6 +7,7 @@ import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { UsersAPI, User as DatabaseUser, SubscriptionsAPI, Subscription } from '../services/database';
 import { RootStackParamList } from '../navigation/types';
+import { formatNumber, formatDate } from '../utils/format';
 
 export default function ManageSubscriptionScreen() {
     const insets = useSafeAreaInsets();
@@ -135,7 +136,7 @@ export default function ManageSubscriptionScreen() {
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 <View style={styles.studentCard}>
                     <Text style={[styles.studentName, { color: activeColors.text }]}>{student?.firstName} {student?.lastName}</Text>
-                    <Text style={[styles.studentPhone, { color: activeColors.textSecondary }]}>{student?.phone}</Text>
+                    <Text style={[styles.studentPhone, { color: activeColors.textSecondary }]}>{formatNumber(student?.phone || '')}</Text>
                 </View>
 
                 <View style={[styles.statusBanner, {

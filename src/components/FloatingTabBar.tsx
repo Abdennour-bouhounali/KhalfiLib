@@ -34,6 +34,13 @@ export default function FloatingTabBar({ state, descriptors, navigation }: Botto
         return (options.tabBarItemStyle as any)?.display !== 'none';
     });
 
+    // Check if the current visible tab bar should be hidden entirely
+    const focusedRoute = state.routes[state.index];
+    const focusedOptions = descriptors[focusedRoute.key].options;
+    if (focusedOptions.tabBarStyle && (focusedOptions.tabBarStyle as any).display === 'none') {
+        return null;
+    }
+
     return (
         <View style={[
             styles.container,
@@ -53,7 +60,9 @@ export default function FloatingTabBar({ state, descriptors, navigation }: Botto
                                 ? options.title
                                 : route.name;
 
-                    const isFocused = state.index === index;
+                    const currentRoute = state.routes[state.index];
+                    const isFocused = route.name === currentRoute.name ||
+                        (route.name === 'Library' && ['PublicCatalog', 'BorrowReturn', 'Fields'].includes(currentRoute.name));
 
                     const onPress = () => {
                         const event = navigation.emit({
@@ -126,7 +135,7 @@ const styles = StyleSheet.create({
     },
     tabContent: {
         flex: 1,
-        flexDirection: 'row-reverse',
+        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-evenly', // Use space-evenly for 5 items
         paddingHorizontal: SPACING.xs,

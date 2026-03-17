@@ -9,6 +9,7 @@ import { BooksAPI, Book, SubscriptionsAPI, Subscription, UsersAPI, User as Datab
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { CreditCard, ShieldCheck, AlertCircle } from 'lucide-react-native';
+import { formatNumber, formatDate } from '../utils/format';
 
 export default function StudentDetailsScreen() {
     const insets = useSafeAreaInsets();
@@ -154,7 +155,7 @@ export default function StudentDetailsScreen() {
                         <Phone color={activeColors.primary} size={20} />
                         <View style={styles.infoText}>
                             <Text style={[styles.label, { color: activeColors.textSecondary }]}>رقم الهاتف</Text>
-                            <Text style={[styles.value, { color: activeColors.text }]}>{student.phone}</Text>
+                            <Text style={[styles.value, { color: activeColors.text }]}>{formatNumber(student.phone)}</Text>
                         </View>
                     </View>
 
@@ -162,7 +163,7 @@ export default function StudentDetailsScreen() {
                         <Calendar color={activeColors.primary} size={20} />
                         <View style={styles.infoText}>
                             <Text style={[styles.label, { color: activeColors.textSecondary }]}>تاريخ الميلاد</Text>
-                            <Text style={[styles.value, { color: activeColors.text }]}>{student.birthdate || 'غير متوفر'}</Text>
+                            <Text style={[styles.value, { color: activeColors.text }]}>{student.birthdate ? formatNumber(student.birthdate) : 'غير متوفر'}</Text>
                         </View>
                     </View>
 
@@ -170,19 +171,19 @@ export default function StudentDetailsScreen() {
                         <Clock color={activeColors.primary} size={20} />
                         <View style={styles.infoText}>
                             <Text style={[styles.label, { color: activeColors.textSecondary }]}>تاريخ التسجيل</Text>
-                            <Text style={[styles.value, { color: activeColors.text }]}>{student.createdAt ? new Date(student.createdAt).toLocaleDateString('ar-EG') : 'غير متوفر'}</Text>
+                            <Text style={[styles.value, { color: activeColors.text }]}>{student.createdAt ? formatDate(student.createdAt) : 'غير متوفر'}</Text>
                         </View>
                     </View>
                 </View>
 
                 <View style={[styles.statsSection, { backgroundColor: activeColors.surface }]}>
                     <View style={[styles.statBox, { borderRightColor: activeColors.border }]}>
-                        <Text style={[styles.statNumber, { color: activeColors.text }]}>{student.previousBooksCount || 0}</Text>
+                        <Text style={[styles.statNumber, { color: activeColors.text }]}>{formatNumber(student.previousBooksCount || 0)}</Text>
                         <Text style={[styles.statLabel, { color: activeColors.textSecondary }]}>كتب سابقة</Text>
                     </View>
                     <View style={[styles.statBox, { borderRightWidth: 0 }]}>
                         <Text style={[styles.statNumber, { color: student.borrowedBookId ? activeColors.primary : activeColors.textTertiary }]}>
-                            {student.borrowedBookId ? '1' : '0'}
+                            {formatNumber(student.borrowedBookId ? 1 : 0)}
                         </Text>
                         <Text style={[styles.statLabel, { color: activeColors.textSecondary }]}>مستعار حالياً</Text>
                     </View>
@@ -207,7 +208,7 @@ export default function StudentDetailsScreen() {
                                 </Text>
                             </View>
                             <Text style={[styles.subDate, { color: activeColors.textSecondary }]}>
-                                ينتهي في: {new Date(subscription.endDate).toLocaleDateString('ar-EG')}
+                                ينتهي في: {formatDate(subscription.endDate)}
                             </Text>
                         </View>
                     ) : (

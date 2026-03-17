@@ -157,6 +157,7 @@ export default function FieldsScreen() {
                     searchValue={searchQuery}
                     onSearchChange={setSearchQuery}
                     searchPlaceholder="ابحث عن تصنيف..."
+                    showBack={true}
                 />
             </View>
 

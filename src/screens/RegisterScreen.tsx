@@ -8,6 +8,8 @@ import Button from '../components/Button';
 import { useNavigation } from '@react-navigation/native';
 import { AuthService } from '../services/AuthService';
 import { UserRole } from '../services/database';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { formatNumber, formatDate } from '../utils/format';
 
 export default function RegisterScreen() {
     const navigation = useNavigation<any>();
@@ -19,18 +21,26 @@ export default function RegisterScreen() {
     const [lastName, setLastName] = useState('');
     const [phone, setPhone] = useState('');
     const [password, setPassword] = useState('');
+    const [birthdate, setBirthdate] = useState(new Date(1995, 0, 1));
+    const [birthdateString, setBirthdateString] = useState('');
+    const [showDatePicker, setShowDatePicker] = useState(false);
     const [loading, setLoading] = useState(false);
 
     const handleRegister = async () => {
-        if (!firstName || !lastName || !phone || !password) {
-            Alert.alert('تنبيه', 'يرجى ملء جميع الحقول المطلوبة');
+        if (!firstName || !lastName || !phone || !password || !birthdateString) {
+            Alert.alert('تنبيه', 'يرجى ملء جميع الحقول المطلوبة بما في ذلك تاريخ الميلاد');
             return;
         }
 
         setLoading(true);
         try {
             const fullName = `${firstName} ${lastName}`;
-            await AuthService.register(fullName, phone, password, role, { firstName, lastName });
+            const formattedPhone = formatNumber(phone);
+            await AuthService.register(fullName, formattedPhone, password, role, {
+                firstName,
+                lastName,
+                birthdate: birthdateString
+            });
             Alert.alert(
                 'تم إرسال الطلب',
                 'تم إنشاء حسابك بنجاح وهو الآن قيد المراجعة من قبل الإدارة.',
@@ -120,6 +130,37 @@ export default function RegisterScreen() {
                             secureTextEntry
                             icon={<Lock size={20} color={activeColors.primary} />}
                         />
+
+                        <TouchableOpacity
+                            style={styles.datePickerTrigger}
+                            onPress={() => setShowDatePicker(true)}
+                        >
+                            <View style={[styles.datePickerContent, { backgroundColor: activeColors.surface, borderColor: activeColors.border }]}>
+                                <Text style={[
+                                    styles.dateText,
+                                    { color: birthdateString ? activeColors.text : activeColors.textTertiary }
+                                ]}>
+                                    {birthdateString || 'تاريخ الميلاد'}
+                                </Text>
+                                <Calendar size={20} color={activeColors.primary} />
+                            </View>
+                        </TouchableOpacity>
+
+                        {showDatePicker && (
+                            <DateTimePicker
+                                value={birthdate}
+                                mode="date"
+                                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                                onChange={(event, selectedDate) => {
+                                    setShowDatePicker(false);
+                                    if (selectedDate) {
+                                        setBirthdate(selectedDate);
+                                        setBirthdateString(formatDate(selectedDate));
+                                    }
+                                }}
+                                maximumDate={new Date()}
+                            />
+                        )}
 
                         {role === 'student' && (
                             <Text style={[styles.hint, { color: activeColors.textTertiary }]}>سيتم تفعيل الحساب بعد موافقة المسؤول</Text>
@@ -212,4 +253,22 @@ const styles = StyleSheet.create({
         fontFamily: FONTS.regular,
         fontSize: 16,
     },
+    datePickerTrigger: {
+        marginBottom: SPACING.m,
+    },
+    datePickerContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderWidth: 1,
+        borderRadius: RADIUS.m,
+        paddingHorizontal: SPACING.m,
+        height: 56,
+    },
+    dateText: {
+        flex: 1,
+        fontFamily: FONTS.regular,
+        fontSize: 16,
+        textAlign: 'right',
+    }
 });

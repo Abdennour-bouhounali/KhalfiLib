@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, Text, ActivityIndicator, SafeAreaView, Platform, Image, ScrollView } from 'react-native';
-import { LogIn, UserPlus, BookOpen } from 'lucide-react-native';
+import { View, StyleSheet, FlatList, TouchableOpacity, Text, ActivityIndicator, SafeAreaView, Platform, Image, ScrollView, Modal, TextInput } from 'react-native';
+import { LogIn, UserPlus, BookOpen, ArrowRight, Plus, Search, Filter, X, Check, ChevronDown } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
@@ -22,6 +22,12 @@ export default function PublicCatalogScreen() {
     const [books, setBooks] = useState<Book[]>([]);
     const [fields, setFields] = useState<Field[]>([]);
     const [loading, setLoading] = useState(true);
+    const [fieldModalVisible, setFieldModalVisible] = useState(false);
+    const [fieldSearchQuery, setFieldSearchQuery] = useState('');
+    const [selectedAgeCategory, setSelectedAgeCategory] = useState<string>('all');
+    const [ageModalVisible, setAgeModalVisible] = useState(false);
+
+    const AGE_CATEGORIES = ['أطفال', 'إبتدائي', 'متوسط', 'ثانوي', 'جامعي', 'بحث علمي'];
 
     useEffect(() => {
         if (isFocused) {
@@ -58,8 +64,9 @@ export default function PublicCatalogScreen() {
         const query = searchQuery || '';
 
         const fieldMatch = selectedField === 'all' || fieldId === selectedField;
+        const ageMatch = selectedAgeCategory === 'all' || b.ageCategory === selectedAgeCategory;
 
-        return fieldMatch && (
+        return fieldMatch && ageMatch && (
             title.toLowerCase().includes(query.toLowerCase()) ||
             author.toLowerCase().includes(query.toLowerCase()) ||
             fieldTitle.toLowerCase().includes(query.toLowerCase())
@@ -79,9 +86,18 @@ export default function PublicCatalogScreen() {
                     </View>
                     <Text style={[styles.headerTitle, { color: activeColors.text }]}>مكتبة عشيرة آل خلفي</Text>
                     <View style={styles.sideIconAbsoluteLeft}>
-                        <View style={styles.iconContainer}>
-                            <BookOpen color={activeColors.primary} size={20} />
-                        </View>
+                        {user ? (
+                            <TouchableOpacity
+                                style={styles.iconContainer}
+                                onPress={() => navigation.navigate('Library')}
+                            >
+                                <ArrowRight color={activeColors.primary} size={20} />
+                            </TouchableOpacity>
+                        ) : (
+                            <View style={styles.iconContainer}>
+                                <BookOpen color={activeColors.primary} size={20} />
+                            </View>
+                        )}
                     </View>
                 </View>
                 <View style={styles.headerComponentWrapper}>
@@ -95,43 +111,129 @@ export default function PublicCatalogScreen() {
                     />
                 </View>
 
-                {/* Field Filter Bar */}
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.filterContainer}
-                    style={styles.filterWrapper}
-                >
+                {/* Filters Buttons */}
+                <View style={[styles.filterWrapper, { flexDirection: 'row-reverse', gap: SPACING.s }]}>
                     <TouchableOpacity
-                        style={[
-                            styles.filterChip,
-                            selectedField === 'all' ? { backgroundColor: activeColors.primary } : { backgroundColor: activeColors.surface }
-                        ]}
-                        onPress={() => setSelectedField('all')}
+                        style={[styles.filterButton, { flex: 1, backgroundColor: activeColors.surface, borderColor: activeColors.border }]}
+                        onPress={() => setFieldModalVisible(true)}
                     >
-                        <Text style={[
-                            styles.filterChipText,
-                            selectedField === 'all' ? { color: activeColors.surface } : { color: activeColors.textSecondary }
-                        ]}>الكل</Text>
+                        <View style={styles.filterBtnContent}>
+                            <ChevronDown color={activeColors.textSecondary} size={16} />
+                            <Text style={[styles.filterBtnText, { color: activeColors.text }]} numberOfLines={1}>
+                                {selectedField === 'all' ? 'المجال' : getFieldTitle(selectedField)}
+                            </Text>
+                        </View>
+                        <Filter color={selectedField !== 'all' ? activeColors.primary : activeColors.textTertiary} size={18} />
                     </TouchableOpacity>
 
-                    {fields.map(field => (
-                        <TouchableOpacity
-                            key={field.id}
-                            style={[
-                                styles.filterChip,
-                                selectedField === field.id ? { backgroundColor: activeColors.primary } : { backgroundColor: activeColors.surface }
-                            ]}
-                            onPress={() => setSelectedField(field.id!)}
-                        >
-                            <Text style={[
-                                styles.filterChipText,
-                                selectedField === field.id ? { color: activeColors.surface } : { color: activeColors.textSecondary }
-                            ]}>{field.title}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
+                    <TouchableOpacity
+                        style={[styles.filterButton, { flex: 1, backgroundColor: activeColors.surface, borderColor: activeColors.border }]}
+                        onPress={() => setAgeModalVisible(true)}
+                    >
+                        <View style={styles.filterBtnContent}>
+                            <ChevronDown color={activeColors.textSecondary} size={16} />
+                            <Text style={[styles.filterBtnText, { color: activeColors.text }]} numberOfLines={1}>
+                                {selectedAgeCategory === 'all' ? 'الفئة' : selectedAgeCategory}
+                            </Text>
+                        </View>
+                        <Filter color={selectedAgeCategory !== 'all' ? activeColors.primary : activeColors.textTertiary} size={18} />
+                    </TouchableOpacity>
+                </View>
             </View>
+
+            {/* Field Selection Modal */}
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={fieldModalVisible}
+                onRequestClose={() => setFieldModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: activeColors.surface }]}>
+                        <View style={styles.modalHeader}>
+                            <TouchableOpacity onPress={() => setFieldModalVisible(false)} style={styles.closeBtn}>
+                                <X color={activeColors.text} size={24} />
+                            </TouchableOpacity>
+                            <Text style={[styles.modalTitle, { color: activeColors.text }]}>اختر المجال</Text>
+                        </View>
+
+                        <View style={[styles.modalSearchContainer, { backgroundColor: isDarkMode ? activeColors.background : '#F5F5F5' }]}>
+                            <Search color={activeColors.textTertiary} size={20} />
+                            <TextInput
+                                style={[styles.modalSearchInput, { color: activeColors.text }]}
+                                placeholder="بحث عن مجال..."
+                                placeholderTextColor={activeColors.textTertiary}
+                                value={fieldSearchQuery}
+                                onChangeText={setFieldSearchQuery}
+                                textAlign="right"
+                            />
+                        </View>
+
+                        <ScrollView contentContainerStyle={styles.fieldsList}>
+                            <TouchableOpacity
+                                style={[styles.fieldItem, selectedField === 'all' && { backgroundColor: activeColors.primary + '15' }]}
+                                onPress={() => { setSelectedField('all'); setFieldModalVisible(false); }}
+                            >
+                                {selectedField === 'all' && <Check color={activeColors.primary} size={20} />}
+                                <Text style={[styles.fieldItemText, { color: selectedField === 'all' ? activeColors.primary : activeColors.text }]}>الكل (جميع المجالات)</Text>
+                            </TouchableOpacity>
+
+                            {fields
+                                .filter(f => f.title.toLowerCase().includes(fieldSearchQuery.toLowerCase()))
+                                .map(field => (
+                                    <TouchableOpacity
+                                        key={field.id}
+                                        style={[styles.fieldItem, selectedField === field.id && { backgroundColor: activeColors.primary + '15' }]}
+                                        onPress={() => { setSelectedField(field.id!); setFieldModalVisible(false); }}
+                                    >
+                                        {selectedField === field.id && <Check color={activeColors.primary} size={20} />}
+                                        <Text style={[styles.fieldItemText, { color: selectedField === field.id ? activeColors.primary : activeColors.text }]}>{field.title}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Age Category Selection Modal */}
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={ageModalVisible}
+                onRequestClose={() => setAgeModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: activeColors.surface }]}>
+                        <View style={styles.modalHeader}>
+                            <TouchableOpacity onPress={() => setAgeModalVisible(false)} style={styles.closeBtn}>
+                                <X color={activeColors.text} size={24} />
+                            </TouchableOpacity>
+                            <Text style={[styles.modalTitle, { color: activeColors.text }]}>اختر الفئة العمرية</Text>
+                        </View>
+
+                        <ScrollView contentContainerStyle={styles.fieldsList}>
+                            <TouchableOpacity
+                                style={[styles.fieldItem, selectedAgeCategory === 'all' && { backgroundColor: activeColors.primary + '15' }]}
+                                onPress={() => { setSelectedAgeCategory('all'); setAgeModalVisible(false); }}
+                            >
+                                {selectedAgeCategory === 'all' && <Check color={activeColors.primary} size={20} />}
+                                <Text style={[styles.fieldItemText, { color: selectedAgeCategory === 'all' ? activeColors.primary : activeColors.text }]}>الكل (جميع الفئات)</Text>
+                            </TouchableOpacity>
+
+                            {AGE_CATEGORIES.map(category => (
+                                <TouchableOpacity
+                                    key={category}
+                                    style={[styles.fieldItem, selectedAgeCategory === category && { backgroundColor: activeColors.primary + '15' }]}
+                                    onPress={() => { setSelectedAgeCategory(category); setAgeModalVisible(false); }}
+                                >
+                                    {selectedAgeCategory === category && <Check color={activeColors.primary} size={20} />}
+                                    <Text style={[styles.fieldItemText, { color: selectedAgeCategory === category ? activeColors.primary : activeColors.text }]}>{category}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
 
             {loading ? (
                 <View style={[styles.listContent, { alignItems: 'center', justifyContent: 'center' }]}>
@@ -160,6 +262,17 @@ export default function PublicCatalogScreen() {
                         </View>
                     }
                 />
+            )}
+
+            {/* Add Book FAB for Admins */}
+            {user && (user.role === 'admin' || user.role === 'super_admin') && (
+                <TouchableOpacity
+                    style={[styles.fab, { backgroundColor: activeColors.primary }]}
+                    onPress={() => navigation.navigate('AddBook')}
+                    activeOpacity={0.8}
+                >
+                    <Plus color={activeColors.surface} size={32} />
+                </TouchableOpacity>
             )}
 
             {/* Bottom Auth Bar for Guests */}
@@ -240,28 +353,83 @@ const styles = StyleSheet.create({
     },
     filterWrapper: {
         marginTop: SPACING.m,
-        marginBottom: SPACING.s,
-    },
-    filterContainer: {
+        marginBottom: SPACING.m,
         paddingHorizontal: SPACING.m,
-        gap: SPACING.s,
-        paddingBottom: SPACING.s,
+    },
+    filterButton: {
         flexDirection: 'row-reverse',
-    },
-    filterChip: {
+        alignItems: 'center',
         paddingHorizontal: SPACING.m,
-        paddingVertical: 8,
-        borderRadius: RADIUS.round,
-        marginHorizontal: 4,
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
+        paddingVertical: 10,
+        borderRadius: RADIUS.m,
+        borderWidth: 1,
+        justifyContent: 'space-between',
     },
-    filterChipText: {
+    filterBtnContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    filterBtnText: {
         fontFamily: FONTS.bold,
         fontSize: 14,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        borderTopLeftRadius: RADIUS.xl,
+        borderTopRightRadius: RADIUS.xl,
+        padding: SPACING.l,
+        maxHeight: '80%',
+        minHeight: '40%',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: SPACING.m,
+    },
+    modalTitle: {
+        fontFamily: FONTS.bold,
+        fontSize: 18,
+    },
+    closeBtn: {
+        padding: 4,
+    },
+    modalSearchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: SPACING.m,
+        borderRadius: RADIUS.m,
+        height: 48,
+        marginBottom: SPACING.m,
+    },
+    modalSearchInput: {
+        flex: 1,
+        fontFamily: FONTS.regular,
+        fontSize: 15,
+        marginHorizontal: 8,
+    },
+    fieldsList: {
+        paddingBottom: SPACING.xxl,
+    },
+    fieldItem: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        paddingVertical: 14,
+        paddingHorizontal: SPACING.m,
+        borderRadius: RADIUS.m,
+        marginBottom: 4,
+        gap: 12,
+    },
+    fieldItemText: {
+        fontFamily: FONTS.medium,
+        fontSize: 16,
+        textAlign: 'right',
+        flex: 1,
     },
     listContent: {
         paddingTop: SPACING.xs,
@@ -282,6 +450,22 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: -3 },
         shadowOpacity: 0.1,
         shadowRadius: 5,
+    },
+    fab: {
+        position: 'absolute',
+        bottom: 150,
+        left: SPACING.m,
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
+        zIndex: 100,
     },
     authButton: {
         flex: 1,

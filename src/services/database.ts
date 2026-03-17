@@ -24,7 +24,7 @@ export interface Book {
     rating: number; // 0-10
     barcode: string;
     coverImage?: string; // Base64 or URI
-    status: 'available' | 'low' | 'unavailable';
+    status: 'available' | 'unavailable';
     createdAt?: string; // Stored as ISO string in RTDB
 }
 
@@ -85,6 +85,10 @@ export interface ChatMessage {
     bookId: string;
     userId: string;
     text: string;
+    type: 'normal' | 'quote' | 'review' | 'thought' | 'question' | 'idea' | 'book_suggestion' | 'author_suggestion' | 'critique';
+    quoteText?: string;
+    pageNumber?: string;
+    rating?: number;
     imageUrl?: string;
     reactions?: Record<string, number>; // e.g. { "👍": 2, "❤️": 1 }
     userReactionType?: Record<string, string>; // userId -> emoji
@@ -97,6 +101,8 @@ export interface LibraryChatMessage {
     id?: string;
     userId: string;
     text: string;
+    type: 'normal' | 'quote' | 'review' | 'thought' | 'question' | 'idea' | 'book_suggestion' | 'author_suggestion';
+    tags?: string[];
     imageUrl?: string;
     reactions?: Record<string, number>;
     userReactionType?: Record<string, string>;
@@ -122,6 +128,20 @@ const objectToArray = <T>(obj: Record<string, any> | null): T[] => {
         id: key,
         ...obj[key]
     })) as T[];
+};
+
+// ==========================================
+// BUSINESS LOGIC HELPERS
+// ==========================================
+export const BookLogic = {
+    computeStatus: (available: number): 'available' | 'unavailable' => {
+        return available > 0 ? 'available' : 'unavailable';
+    },
+    validate: (total: number, available: number) => {
+        if (total < 0) throw new Error('Total copies cannot be negative');
+        if (available < 0) throw new Error('Available copies cannot be negative');
+        if (available > total) throw new Error('Available copies cannot exceed total copies');
+    }
 };
 
 // ==========================================
@@ -223,8 +243,10 @@ export const BooksAPI = {
 
     create: async (book: Omit<Book, 'id'>): Promise<string> => {
         try {
+            BookLogic.validate(book.copiesTotal, book.copiesAvailable);
             book.createdAt = new Date().toISOString();
-            book.status = book.copiesAvailable === 0 ? 'unavailable' : (book.copiesAvailable < 3 ? 'low' : 'available');
+            book.status = BookLogic.computeStatus(book.copiesAvailable);
+
             const booksRef = ref(db, 'books');
             const newRef = await push(booksRef, book);
             return newRef.key as string;
@@ -234,12 +256,25 @@ export const BooksAPI = {
         }
     },
 
-    update: async (id: string, book: Partial<Book>) => {
-        if (book.copiesAvailable !== undefined) {
-            book.status = book.copiesAvailable === 0 ? 'unavailable' : (book.copiesAvailable < 3 ? 'low' : 'available');
+    update: async (id: string, updates: Partial<Book>) => {
+        try {
+            const bookRef = ref(db, `books/${id}`);
+            const snapshot = await get(bookRef);
+            if (!snapshot.exists()) throw new Error('Book not found');
+
+            const currentBook = snapshot.val() as Book;
+            const newTotal = updates.copiesTotal !== undefined ? updates.copiesTotal : currentBook.copiesTotal;
+            const newAvailable = updates.copiesAvailable !== undefined ? updates.copiesAvailable : currentBook.copiesAvailable;
+
+            // Validate & Force Status
+            BookLogic.validate(newTotal, newAvailable);
+            updates.status = BookLogic.computeStatus(newAvailable);
+
+            await update(bookRef, updates);
+        } catch (error) {
+            console.error(`[BooksAPI] update failed:`, error);
+            throw error;
         }
-        const bookRef = ref(db, `books/${id}`);
-        await update(bookRef, book);
     },
 
     delete: async (id: string) => {
@@ -396,13 +431,16 @@ export const BorrowingAPI = {
         const bookRef = ref(db, `books/${bookId}`);
         const bookSnapshot = await get(bookRef);
         if (bookSnapshot.exists()) {
-            const currentCopies = bookSnapshot.val().copiesAvailable || 0;
-            const newCopies = Math.max(0, currentCopies - 1);
-            const newStatus = newCopies === 0 ? 'unavailable' : (newCopies < 3 ? 'low' : 'available');
+            const currentBook = bookSnapshot.val() as Book;
+            const currentCopies = currentBook.copiesAvailable || 0;
+            const newCopies = currentCopies - 1;
+
+            // Safety check
+            if (newCopies < 0) throw new Error('No copies available to borrow');
 
             await update(bookRef, {
                 copiesAvailable: newCopies,
-                status: newStatus
+                status: BookLogic.computeStatus(newCopies)
             });
         }
     },
@@ -445,13 +483,18 @@ export const BorrowingAPI = {
         const bookRef = ref(db, `books/${bookId}`);
         const bookSnapshot = await get(bookRef);
         if (bookSnapshot.exists()) {
-            const currentCopies = bookSnapshot.val().copiesAvailable || 0;
+            const currentBook = bookSnapshot.val() as Book;
+            const currentCopies = currentBook.copiesAvailable || 0;
             const newCopies = currentCopies + 1;
-            const newStatus = newCopies === 0 ? 'unavailable' : (newCopies < 3 ? 'low' : 'available');
+
+            // Safety check
+            if (newCopies > (currentBook.copiesTotal || 0)) {
+                console.warn('[BorrowingAPI] Returning more copies than total. Normalizing.');
+            }
 
             await update(bookRef, {
-                copiesAvailable: newCopies,
-                status: newStatus
+                copiesAvailable: Math.min(newCopies, currentBook.copiesTotal),
+                status: BookLogic.computeStatus(newCopies)
             });
         }
     },
@@ -570,9 +613,10 @@ export const ChatAPI = {
         try {
             const msg: ChatMessage = {
                 ...message,
+                type: message.type || 'normal',
                 createdAt: new Date().toISOString(),
                 timestamp: Date.now()
-            };
+            } as ChatMessage;
 
             // Remove undefined values to avoid Firebase errors
             Object.keys(msg).forEach(key => {
@@ -668,9 +712,10 @@ export const LibraryChatAPI = {
         try {
             const msg: LibraryChatMessage = {
                 ...message,
+                type: message.type || 'normal',
                 createdAt: new Date().toISOString(),
                 timestamp: Date.now()
-            };
+            } as LibraryChatMessage;
 
             // Remove undefined values to avoid Firebase errors
             Object.keys(msg).forEach(key => {

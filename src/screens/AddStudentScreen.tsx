@@ -2,13 +2,15 @@ import React, { useState, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Image } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { ArrowRight, Check, User, Phone, Calendar } from 'lucide-react-native';
+import { ArrowRight, Check, User, Phone, Calendar as CalendarIcon } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { UsersAPI, User as DatabaseUser } from '../services/database';
 import { RootStackParamList } from '../navigation/types';
 import { AuthService } from '../services/AuthService';
+import { formatNumber, formatDate } from '../utils/format';
 
 export default function AddStudentScreen() {
     const insets = useSafeAreaInsets();
@@ -23,7 +25,9 @@ export default function AddStudentScreen() {
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
     const [phone, setPhone] = useState('');
-    const [birthdate, setBirthdate] = useState('');
+    const [birthdate, setBirthdate] = useState(new Date(1995, 0, 1));
+    const [birthdateString, setBirthdateString] = useState('');
+    const [showDatePicker, setShowDatePicker] = useState(false);
     const [profilePicture, setProfilePicture] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -76,8 +80,16 @@ export default function AddStudentScreen() {
             if (user) {
                 setFirstName(user.firstName || '');
                 setLastName(user.lastName || '');
-                setPhone(user.phone);
-                setBirthdate(user.birthdate || '');
+                setPhone(formatNumber(user.phone));
+                if (user.birthdate) {
+                    const parsedDate = new Date(user.birthdate);
+                    if (!isNaN(parsedDate.getTime())) {
+                        setBirthdate(parsedDate);
+                        setBirthdateString(formatDate(parsedDate));
+                    } else {
+                        setBirthdateString(formatNumber(user.birthdate));
+                    }
+                }
                 setProfilePicture(user.profileImage || null);
 
                 // If name exists but firstName/lastName don't, try to split
@@ -105,8 +117,8 @@ export default function AddStudentScreen() {
                 firstName,
                 lastName,
                 name: `${firstName} ${lastName}`,
-                phone,
-                birthdate,
+                phone: formatNumber(phone),
+                birthdate: birthdateString,
                 profileImage: profilePicture || undefined,
             };
 
@@ -242,17 +254,35 @@ export default function AddStudentScreen() {
                 </View>
 
                 <View style={styles.formGroup}>
-                    <View style={[styles.inputContainer, { borderColor: ACCENT, backgroundColor: activeColors.surface }]}>
-                        <TextInput
-                            style={[styles.input, { color: activeColors.text }]}
-                            placeholder="تاريخ الميلاد"
-                            placeholderTextColor={activeColors.textTertiary}
-                            value={birthdate}
-                            onChangeText={setBirthdate}
-                        />
-                        <Calendar color={ACCENT_DARK} size={20} style={styles.iconStyle} />
-                    </View>
+                    <TouchableOpacity
+                        style={[styles.inputContainer, { borderColor: ACCENT, backgroundColor: activeColors.surface }]}
+                        onPress={() => setShowDatePicker(true)}
+                    >
+                        <Text style={[
+                            styles.input,
+                            { color: birthdateString ? activeColors.text : activeColors.textTertiary, textAlign: 'right' }
+                        ]}>
+                            {birthdateString || 'تاريخ الميلاد'}
+                        </Text>
+                        <CalendarIcon color={ACCENT_DARK} size={20} style={styles.iconStyle} />
+                    </TouchableOpacity>
                 </View>
+
+                {showDatePicker && (
+                    <DateTimePicker
+                        value={birthdate}
+                        mode="date"
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        onChange={(event, selectedDate) => {
+                            setShowDatePicker(false);
+                            if (selectedDate) {
+                                setBirthdate(selectedDate);
+                                setBirthdateString(formatDate(selectedDate));
+                            }
+                        }}
+                        maximumDate={new Date()}
+                    />
+                )}
 
                 {/* Submit */}
                 <TouchableOpacity

@@ -1,13 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Text, TextInput, TouchableOpacity, FlatList, Image, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView, Keyboard } from 'react-native';
-import { useRoute, useNavigation } from '@react-navigation/native';
-import { ArrowLeft, Camera, Image as ImageIcon, Smile, Send, Trash2, Reply, MoreVertical, X } from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
+import { ArrowLeft, Camera, Image as ImageIcon, Smile, Send, X, HelpCircle, Lightbulb, BookOpen, User as UserIcon, MessageCircle, Flag, ChevronRight } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { LibraryChatAPI, UsersAPI, LibraryChatMessage, User } from '../services/database';
+import ChatMessageItem from '../components/ChatMessageItem';
+import MessageOptionsSheet from '../components/MessageOptionsSheet';
+
+const TYPE_CONFIG = {
+    question: { label: 'سؤال', color: '#3B82F6', icon: HelpCircle },
+    idea: { label: 'فكرة', color: '#6366F1', icon: Lightbulb },
+    book_suggestion: { label: 'اقتراح كتاب', color: '#F43F5E', icon: BookOpen },
+    author_suggestion: { label: 'اقتراح كاتب', color: '#F97316', icon: UserIcon },
+    thought: { label: 'خاطرة', color: '#A855F7', icon: MessageCircle },
+};
 
 export default function LibraryChatScreen() {
     const navigation = useNavigation<any>();
@@ -24,6 +34,9 @@ export default function LibraryChatScreen() {
     const [showEmojis, setShowEmojis] = useState(false);
     const [replyTo, setReplyTo] = useState<LibraryChatMessage | null>(null);
     const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+    const [msgType, setMsgType] = useState<keyof typeof TYPE_CONFIG | 'normal'>('normal');
+    const [selectedMessage, setSelectedMessage] = useState<LibraryChatMessage | null>(null);
+    const [isOptionsVisible, setIsOptionsVisible] = useState(false);
 
     const flatListRef = useRef<FlatList>(null);
     const usersMapRef = useRef<Record<string, User>>({});
@@ -34,12 +47,10 @@ export default function LibraryChatScreen() {
             setMessages(msgs);
             setLoading(false);
 
-            // Extract unique users to show count and fetch their info
             const uids = new Set<string>();
             msgs.forEach(m => uids.add(m.userId));
             setParticipantCount(uids.size);
 
-            // Fetch users info dynamically if not in map
             uids.forEach(uid => {
                 if (!usersMapRef.current[uid]) {
                     UsersAPI.getById(uid).then(u => {
@@ -52,7 +63,6 @@ export default function LibraryChatScreen() {
                 }
             });
 
-            // Scroll to bottom
             setTimeout(() => {
                 flatListRef.current?.scrollToEnd({ animated: true });
             }, 100);
@@ -76,11 +86,13 @@ export default function LibraryChatScreen() {
             await LibraryChatAPI.sendMessage({
                 userId: user.id!,
                 text: inputText.trim(),
+                type: msgType as any,
                 imageUrl: imageUrl,
                 replyToId: replyTo?.id,
             });
             setInputText('');
             setReplyTo(null);
+            setMsgType('normal');
         } catch (error) {
             Alert.alert('خطأ', 'فشل إرسال الرسالة');
         }
@@ -110,7 +122,7 @@ export default function LibraryChatScreen() {
 
             if (!result.canceled && result.assets && result.assets.length > 0) {
                 const base64Img = `data:image/jpeg;base64,${result.assets[0].base64}`;
-                handleSend(base64Img); // Send directly for simplicity or keep it in a preview
+                handleSend(base64Img);
             }
         } catch (error) {
             console.error(error);
@@ -138,32 +150,16 @@ export default function LibraryChatScreen() {
     };
 
     const handleMessageOptions = (item: LibraryChatMessage) => {
-        const isSelf = item.userId === user?.id;
-        const options: any = [
-            {
-                text: 'رد',
-                onPress: () => {
-                    // Pre-fetch sender if missing in map
-                    if (!usersMap[item.userId]) {
-                        UsersAPI.getById(item.userId).then(u => {
-                            if (u) {
-                                const newMap = { ...usersMapRef.current, [item.userId]: u };
-                                usersMapRef.current = newMap;
-                                setUsersMap(newMap);
-                            }
-                        });
-                    }
-                    setReplyTo(item);
-                }
-            }
-        ];
+        setSelectedMessage(item);
+        setIsOptionsVisible(true);
+    };
 
-        if (isSelf) {
-            options.push({ text: 'حذف', style: 'destructive', onPress: () => handleDelete(item.id!) });
-        }
-        options.push({ text: 'إلغاء', style: 'cancel' });
+    const handleCopyText = (text: string) => {
+        Alert.alert('تم النسخ', 'تم نسخ نص الرسالة إلى الحافظة');
+    };
 
-        Alert.alert('خيارات الرسالة', '', options);
+    const handleReport = (item: LibraryChatMessage) => {
+        Alert.alert('إبلاغ', 'شكرًا لإبلاغنا. سنقوم بمراجعة الرسالة.', [{ text: 'تم' }]);
     };
 
     const formatTime = (ts: number) => {
@@ -174,146 +170,43 @@ export default function LibraryChatScreen() {
     const renderMessage = ({ item }: { item: LibraryChatMessage }) => {
         const isSelf = item.userId === user?.id;
         const msgUser = usersMap[item.userId];
-        const bubbleColor = isSelf ? '#cde7d6' : (isDarkMode ? '#333' : '#f0f0f0'); // Soft green for self, light gray for others
-        const textColor = isSelf ? '#1E3A2F' : activeColors.text;
+        const replyToMessage = item.replyToId ? messages.find(m => m.id === item.replyToId) : undefined;
+        const replyToUser = replyToMessage ? usersMap[replyToMessage.userId] : undefined;
 
         return (
-            <View style={[styles.messageWrapper, isSelf ? styles.messageWrapperSelf : styles.messageWrapperOther]}>
-
-                {/* Profile Image for Others (Placed before content so row direction puts it on the left) */}
-                {!isSelf && (
-                    <View style={styles.avatarContainer}>
-                        {msgUser?.profileImage ? (
-                            <Image source={{ uri: msgUser.profileImage }} style={styles.avatar} />
-                        ) : (
-                            <View style={[styles.avatar, { backgroundColor: activeColors.border, justifyContent: 'center', alignItems: 'center' }]}>
-                                <Text style={{ fontSize: 18, fontFamily: FONTS.bold, color: activeColors.textTertiary }}>
-                                    {msgUser?.name?.charAt(0) || '?'}
-                                </Text>
-                            </View>
-                        )}
-                    </View>
-                )}
-
-                {/* Profile Image for Self (Placed before content so row-reverse puts it on the right) */}
-                {isSelf && (
-                    <View style={styles.avatarContainer}>
-                        {user?.profileImage ? (
-                            <Image source={{ uri: user.profileImage }} style={styles.avatar} />
-                        ) : (
-                            <View style={[styles.avatar, { backgroundColor: activeColors.border, justifyContent: 'center', alignItems: 'center' }]}>
-                                <Text style={{ fontSize: 18, fontFamily: FONTS.bold, color: activeColors.textTertiary }}>
-                                    {user?.name?.charAt(0) || '?'}
-                                </Text>
-                            </View>
-                        )}
-                    </View>
-                )}
-
-                <View style={[styles.messageContent, isSelf ? styles.messageContentSelf : styles.messageContentOther]}>
-                    <TouchableOpacity
-                        activeOpacity={0.8}
-                        style={[styles.messageBubble, { backgroundColor: bubbleColor }]}
-                    >
-                        {/* Name (Always visible for others) */}
-                        {!isSelf && msgUser && (
-                            <View style={styles.senderNameRow}>
-                                <Text style={[styles.senderName, { color: activeColors.primary }]}>
-                                    {msgUser.name || 'مستخدم'}
-                                    {msgUser.phone ? ` ~ ${msgUser.phone}` : ''}
-                                </Text>
-                            </View>
-                        )}
-
-                        {/* Reply Snippet if any */}
-                        {item.replyToId && (() => {
-                            const originalMsg = messages.find(m => m.id === item.replyToId);
-                            const originalUser = usersMap[originalMsg?.userId || ''];
-                            return (
-                                <View style={[styles.replySnippetInside, { borderRightColor: activeColors.primary }]}>
-                                    <View style={{ flexShrink: 1, paddingRight: 6 }}>
-                                        <Text style={[styles.replySnippetName, { color: activeColors.primary }]} numberOfLines={1}>
-                                            {originalUser?.name || 'مستخدم'}
-                                        </Text>
-                                        <Text style={styles.replySnippetText} numberOfLines={2}>
-                                            {originalMsg?.text || 'صورة'}
-                                        </Text>
-                                    </View>
-                                </View>
-                            );
-                        })()}
-
-                        {/* Image Attachment */}
-                        {item.imageUrl && (
-                            <Image source={{ uri: item.imageUrl }} style={styles.messageImage} />
-                        )}
-
-                        {/* Text */}
-                        {item.text ? (
-                            <Text style={[styles.messageText, { color: textColor }]}>{item.text}</Text>
-                        ) : null}
-                    </TouchableOpacity>
-
-                    {/* Reactions array */}
-                    {item.reactions && Object.keys(item.reactions).length > 0 && (
-                        <View style={[styles.reactionsContainer, isSelf ? { alignSelf: 'flex-start' } : { alignSelf: 'flex-end' }]}>
-                            {Object.entries(item.reactions).map(([emoji, count]) => (
-                                <TouchableOpacity
-                                    key={emoji}
-                                    style={styles.reactionPill}
-                                    onPress={() => handleReaction(item.id!, emoji)}
-                                >
-                                    <Text style={styles.reactionText}>{emoji} {count}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    )}
-
-                    {/* Action Buttons (Below bubble) */}
-                    <View style={[styles.messageActions, isSelf ? { alignSelf: 'flex-start' } : { alignSelf: 'flex-end' }]}>
-                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-                            <TouchableOpacity onPress={() => handleReaction(item.id!, '👍')}><Text>👍</Text></TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleReaction(item.id!, '❤️')}><Text>❤️</Text></TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleReaction(item.id!, '📚')}><Text>📚</Text></TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-
-                {/* Time & Options (Outside Bubble) */}
-                <View style={{ flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 32, marginHorizontal: 4 }}>
-                    <TouchableOpacity style={{ marginBottom: 4, padding: 4 }} onPress={() => handleMessageOptions(item)}>
-                        <MoreVertical size={16} color={activeColors.textSecondary} />
-                    </TouchableOpacity>
-                    <Text style={{ fontSize: 10, color: activeColors.textTertiary, fontFamily: FONTS.regular }}>
-                        {formatTime(item.timestamp)}
-                    </Text>
-                </View>
-            </View>
+            <ChatMessageItem
+                message={item}
+                isSelf={isSelf}
+                user={msgUser}
+                activeColors={activeColors}
+                onReaction={(emoji) => handleReaction(item.id!, emoji)}
+                onOptions={() => handleMessageOptions(item)}
+                replyToMessage={replyToMessage}
+                replyToUser={replyToUser}
+            />
         );
     };
 
     const renderContent = () => (
         <>
-            {/* Header */}
             <View style={[styles.header, { backgroundColor: activeColors.surface, paddingTop: Platform.OS === 'android' ? insets.top + 10 : 10 }]}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <ArrowLeft size={24} color={activeColors.text} />
-                </TouchableOpacity>
+                <View style={styles.backButton} /> {/* Spacer for symmetry */}
 
                 <View style={styles.headerInfo}>
-                    <Text style={[styles.headerTitle, { color: activeColors.text }]} >نقاش المكتبة</Text>
-
+                    <Text style={[styles.headerTitle, { color: activeColors.text }]} >النقاش العام</Text>
                     <Text style={[styles.headerCount, { color: activeColors.primary }]}>
-                        {participantCount} مشارك في النقاش
+                        مساحة لكل القرّاء
                     </Text>
                 </View>
 
-                <View style={[styles.bookCoverContainer, { backgroundColor: '#E6EEEB', justifyContent: 'center', alignItems: 'center' }]}>
-                    <Text style={{ fontSize: 24 }}>💬</Text>
-                </View>
+                <TouchableOpacity
+                    onPress={() => navigation.goBack()}
+                    style={[styles.bookCoverContainer, { backgroundColor: '#E6F4EA', justifyContent: 'center', alignItems: 'center' }]}
+                >
+                    <ChevronRight size={24} color={activeColors.primary} />
+                </TouchableOpacity>
             </View>
 
-            {/* Chat List */}
             {loading ? (
                 <View style={styles.centerBox}>
                     <ActivityIndicator size="large" color={activeColors.primary} />
@@ -332,7 +225,6 @@ export default function LibraryChatScreen() {
                 />
             )}
 
-            {/* Quick Emojis */}
             {showEmojis && (
                 <View style={[styles.emojiContainer, { backgroundColor: activeColors.surface }]}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: SPACING.m }}>
@@ -345,7 +237,6 @@ export default function LibraryChatScreen() {
                 </View>
             )}
 
-            {/* Input Area */}
             {replyTo && (() => {
                 const originalUser = usersMap[replyTo.userId];
                 return (
@@ -358,15 +249,6 @@ export default function LibraryChatScreen() {
                                 {replyTo.text || 'صورة'}
                             </Text>
                         </View>
-                        {originalUser?.profileImage ? (
-                            <Image source={{ uri: originalUser.profileImage }} style={styles.replyPreviewAvatar} />
-                        ) : (
-                            <View style={[styles.replyPreviewAvatar, { backgroundColor: activeColors.border, justifyContent: 'center', alignItems: 'center' }]}>
-                                <Text style={{ fontSize: 14, fontFamily: FONTS.bold, color: activeColors.textTertiary }}>
-                                    {originalUser?.name?.charAt(0) || '?'}
-                                </Text>
-                            </View>
-                        )}
                         <TouchableOpacity style={{ marginLeft: 15 }} onPress={() => setReplyTo(null)}>
                             <X size={20} color={activeColors.textTertiary} />
                         </TouchableOpacity>
@@ -374,47 +256,85 @@ export default function LibraryChatScreen() {
                 );
             })()}
 
-            <View style={[styles.inputContainer, {
-                marginBottom: isKeyboardVisible ? insets.bottom + 260 : (85 + insets.bottom),
-                paddingTop: 6
-            }]}>
+            <View style={[styles.inputWrapper, { paddingBottom: insets.bottom + (isKeyboardVisible ? 260 : 5) }]}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.richToolsScroll} contentContainerStyle={styles.richToolsRow}>
+                    {(Object.entries(TYPE_CONFIG) as [keyof typeof TYPE_CONFIG, typeof TYPE_CONFIG['question']][]).map(([type, cfg]) => {
+                        const isSelected = msgType === type;
+                        const Icon = cfg.icon;
+                        return (
+                            <TouchableOpacity
+                                key={type}
+                                style={[styles.toolBtn, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }, isSelected && { backgroundColor: cfg.color }]}
+                                onPress={() => setMsgType(isSelected ? 'normal' : type)}
+                            >
+                                <Icon size={18} color={isSelected ? '#FFF' : activeColors.textSecondary} />
+                                <Text style={[styles.toolText, { color: isSelected ? '#FFF' : activeColors.textSecondary }]}>{cfg.label}</Text>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </ScrollView>
 
-                {/* The rounded text input area */}
-                <View style={[styles.innerInputBox, { backgroundColor: isDarkMode ? '#2C2C2C' : '#FFFFFF' }]}>
-                    <TouchableOpacity onPress={() => setShowEmojis(!showEmojis)} style={styles.iconBtn}>
-                        <Smile size={24} color={activeColors.textSecondary} />
-                    </TouchableOpacity>
+                <View style={styles.inputContainer}>
+                    <View style={[styles.innerInputBox, { backgroundColor: isDarkMode ? '#2C2C2C' : '#FFFFFF' }]}>
+                        <TouchableOpacity onPress={() => setShowEmojis(!showEmojis)} style={styles.iconBtn}>
+                            <Smile size={24} color={activeColors.textSecondary} />
+                        </TouchableOpacity>
 
-                    <TextInput
-                        style={[styles.input, { color: activeColors.text }]}
-                        placeholder="اكتب رسالة..."
-                        placeholderTextColor={activeColors.textTertiary}
-                        value={inputText}
-                        onChangeText={setInputText}
-                        multiline
-                        textAlign="right"
-                    />
+                        <TextInput
+                            style={[styles.input, { color: activeColors.text }]}
+                            placeholder="شارك أفكارك..."
+                            placeholderTextColor={activeColors.textTertiary}
+                            value={inputText}
+                            onChangeText={setInputText}
+                            multiline
+                            textAlign="right"
+                        />
 
-                    <TouchableOpacity onPress={() => handleImagePick(false)} style={styles.iconBtn}>
-                        <ImageIcon size={22} color={activeColors.textSecondary} />
-                    </TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleImagePick(false)} style={styles.iconBtn}>
+                            <ImageIcon size={22} color={activeColors.textSecondary} />
+                        </TouchableOpacity>
 
-                    <TouchableOpacity onPress={() => handleImagePick(true)} style={styles.iconBtn}>
-                        <Camera size={22} color={activeColors.textSecondary} />
-                    </TouchableOpacity>
-                </View>
+                        <TouchableOpacity onPress={() => handleImagePick(true)} style={styles.iconBtn}>
+                            <Camera size={22} color={activeColors.textSecondary} />
+                        </TouchableOpacity>
+                    </View>
 
-                {/* Send Button outside */}
-                <View style={styles.sendButtonContainer}>
-                    <TouchableOpacity
-                        style={[styles.sendButton, { backgroundColor: '#008b8b' }]}
-                        onPress={() => handleSend()}
-                        disabled={!inputText.trim() && !replyTo}
-                    >
-                        <Send size={20} color="#FFF" />
-                    </TouchableOpacity>
+                    <View style={styles.sendButtonContainer}>
+                        <TouchableOpacity
+                            style={[styles.sendButton, { backgroundColor: activeColors.primary }]}
+                            onPress={() => handleSend()}
+                            disabled={!inputText.trim()}
+                        >
+                            <Send size={20} color="#FFF" />
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </View>
+
+            {selectedMessage && (
+                <MessageOptionsSheet
+                    isVisible={isOptionsVisible}
+                    onClose={() => setIsOptionsVisible(false)}
+                    isOwnMessage={selectedMessage.userId === user?.id}
+                    onReply={() => {
+                        if (selectedMessage) {
+                            if (!usersMap[selectedMessage.userId]) {
+                                UsersAPI.getById(selectedMessage.userId).then(u => {
+                                    if (u) {
+                                        const newMap = { ...usersMapRef.current, [selectedMessage.userId]: u };
+                                        usersMapRef.current = newMap;
+                                        setUsersMap(newMap);
+                                    }
+                                });
+                            }
+                            setReplyTo(selectedMessage);
+                        }
+                    }}
+                    onCopy={() => handleCopyText(selectedMessage.text)}
+                    onDelete={() => handleDelete(selectedMessage.id!)}
+                    onReport={() => handleReport(selectedMessage)}
+                />
+            )}
         </>
     );
 
@@ -468,11 +388,6 @@ const styles = StyleSheet.create({
         fontFamily: FONTS.bold,
         fontSize: 18,
     },
-    headerSubtitle: {
-        fontFamily: FONTS.medium,
-        fontSize: 14,
-        marginTop: 2,
-    },
     headerCount: {
         fontFamily: FONTS.medium,
         fontSize: 12,
@@ -489,9 +404,30 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 4,
     },
-    bookCover: {
-        width: '100%',
-        height: '100%',
+    inputWrapper: {
+        backgroundColor: 'transparent',
+    },
+    richToolsScroll: {
+        paddingVertical: 12,
+        backgroundColor: 'rgba(0,0,0,0.02)',
+    },
+    richToolsRow: {
+        flexDirection: 'row-reverse',
+        paddingHorizontal: SPACING.m,
+        gap: 12,
+        alignItems: 'center',
+    },
+    toolBtn: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 24,
+        gap: 8,
+    },
+    toolText: {
+        fontSize: 13,
+        fontFamily: FONTS.bold,
     },
     listContent: {
         padding: SPACING.m,
@@ -501,97 +437,6 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-    },
-    messageWrapper: {
-        marginBottom: 8,
-        width: '100%',
-    },
-    messageWrapperSelf: {
-        flexDirection: 'row-reverse',
-        justifyContent: 'flex-start',
-    },
-    messageWrapperOther: {
-        flexDirection: 'row',
-        justifyContent: 'flex-start',
-    },
-    avatarContainer: {
-        width: 42,
-        height: 42,
-        borderRadius: 21,
-        marginHorizontal: 8,
-        overflow: 'hidden',
-    },
-    avatar: {
-        width: '100%',
-        height: '100%',
-    },
-    messageContent: {
-        maxWidth: '70%',
-    },
-    messageContentSelf: {
-        alignItems: 'flex-end', // left aligned in RTL
-    },
-    messageContentOther: {
-        alignItems: 'flex-start', // right aligned in RTL
-    },
-    messageBubble: {
-        paddingVertical: 6,
-        paddingHorizontal: 10,
-        borderRadius: RADIUS.l,
-    },
-    senderNameRow: {
-        flexDirection: 'row-reverse',
-        alignItems: 'center',
-        marginBottom: 4,
-    },
-    senderName: {
-        fontFamily: FONTS.bold,
-        fontSize: 12,
-        textAlign: 'right',
-    },
-    messageImage: {
-        width: 200,
-        height: 200,
-        borderRadius: RADIUS.m,
-        marginBottom: 8,
-    },
-    messageText: {
-        fontFamily: FONTS.medium,
-        fontSize: 15,
-        lineHeight: 22,
-        textAlign: 'right',
-
-    },
-    messageTime: {
-        fontSize: 10,
-        fontFamily: FONTS.regular,
-        textAlign: 'left',
-        marginTop: 4,
-    },
-    messageActions: {
-        flexDirection: 'row-reverse',
-        alignItems: 'center',
-    },
-    reactionsContainer: {
-        flexDirection: 'row-reverse',
-        marginTop: -10,
-        marginBottom: 4,
-        backgroundColor: '#fff',
-        borderRadius: 12,
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 2,
-        zIndex: 10,
-    },
-    reactionPill: {
-        paddingHorizontal: 4,
-    },
-    reactionText: {
-        fontSize: 12,
     },
     inputContainer: {
         flexDirection: 'row-reverse',
@@ -629,7 +474,7 @@ const styles = StyleSheet.create({
     },
     sendButtonContainer: {
         justifyContent: 'flex-end',
-        marginBottom: 4,     // align with bottom of input box
+        marginBottom: 4,
         marginLeft: 4,
     },
     sendButton: {
@@ -655,14 +500,6 @@ const styles = StyleSheet.create({
         padding: SPACING.m,
         borderTopWidth: 1,
         borderTopColor: '#EEEEEE',
-        borderLeftWidth: 4,
-        borderLeftColor: '#388E3C', // Accent color
-    },
-    replyPreviewAvatar: {
-        width: 30,
-        height: 30,
-        borderRadius: 15,
-        marginLeft: 10,
     },
     replyPreviewName: {
         fontFamily: FONTS.bold,
@@ -675,26 +512,4 @@ const styles = StyleSheet.create({
         fontSize: 13,
         textAlign: 'right',
     },
-    replySnippetInside: {
-        flexDirection: 'row-reverse',
-        alignItems: 'center',
-        padding: 8,
-        borderRadius: RADIUS.s,
-        borderRightWidth: 4,
-        marginBottom: 8,
-        alignSelf: 'stretch', // ensures it spans horizontally
-        backgroundColor: 'rgba(0,0,0,0.06)',
-    },
-    replySnippetName: {
-        fontFamily: FONTS.bold,
-        fontSize: 13,
-        textAlign: 'right',
-        marginBottom: 2,
-    },
-    replySnippetText: {
-        fontFamily: FONTS.regular,
-        fontSize: 13,
-        color: '#555',
-        textAlign: 'right',
-    }
 });
