@@ -46,22 +46,41 @@ jobs:
           cd android
           ./gradlew assembleRelease --no-daemon
 
-      - name: Prepare APK for Release
+      - name: Prepare APKs for Release
         run: |
-          mv android/app/build/outputs/apk/release/app-release.apk library-app-v${{ env.VERSION_NAME }}.apk
+          mkdir -p release-apks
+          # Find all generated APKs and copy them with better names
+          find android/app/build/outputs/apk/release/ -name "*.apk" | while read -r apk; do
+            filename=$(basename "$apk")
+            if [[ "$filename" == *"universal"* ]]; then
+              cp "$apk" "library-app-v${{ env.VERSION_NAME }}-universal.apk"
+            elif [[ "$filename" == *"arm64-v8a"* ]]; then
+              cp "$apk" "library-app-v${{ env.VERSION_NAME }}-arm64.apk"
+            elif [[ "$filename" == *"armeabi-v7a"* ]]; then
+              cp "$apk" "library-app-v${{ env.VERSION_NAME }}-armv7.apk"
+            else
+              cp "$apk" "library-app-v${{ env.VERSION_NAME }}-${filename}"
+            fi
+          done
 
-      - name: Create Release and Upload Asset
+      - name: Create Release and Upload Assets
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION_NAME }}-${{ github.run_number }}
           name: Release v${{ env.VERSION_NAME }}
           body: |
-            ### Automated Release
-            - **Version**: ${{ env.VERSION_NAME }}
-            - **Build Number**: ${{ github.run_number }}
-            - **Commit**: ${{ github.sha }}
-            - **Status**: Stable
-          files: library-app-v${{ env.VERSION_NAME }}.apk
+            ### 🚀 Optimized Release v${{ env.VERSION_NAME }}
+            
+            This release includes multiple APK versions to save space:
+            - **Universal**: ~45MB (Works on all devices)
+            - **Arm64**: ~25MB (Recommended for most modern phones)
+            - **Armv7**: ~25MB (For older phones)
+            
+            **Changes:**
+            - Enabled R8/Minification to reduce code size.
+            - Enabled Resource Shrinking.
+            - Split APKs by architecture.
+          files: library-app-v${{ env.VERSION_NAME }}-*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
