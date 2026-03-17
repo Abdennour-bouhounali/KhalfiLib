@@ -92,4 +92,4 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           VERSION_NAME: ${{ env.VERSION_NAME }}
           BUILD_NUMBER: ${{ github.run_number }}
-          APK_URL: "https://github.com/Abdennour-bouhounali/KhalfiLib/releases/download/v${{ env.VERSION_NAME }}-${{ github.run_number }}/library-app-v${{ env.VERSION_NAME }}.apk"
+          APK_URL: "https://github.com/Abdennour-bouhounali/KhalfiLib/releases/download/v${{ env.VERSION_NAME }}-${{ github.run_number }}/library-app-v${{ env.VERSION_NAME }}-arm64.apk"
