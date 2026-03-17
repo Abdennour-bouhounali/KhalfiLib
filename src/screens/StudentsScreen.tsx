@@ -6,7 +6,7 @@ import { useTheme } from '../theme/ThemeContext';
 import Header from '../components/Header';
 import StudentCard, { StudentProps } from '../components/StudentCard';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
-import { StudentsAPI, Student } from '../services/database';
+import { UsersAPI, User as DatabaseUser } from '../services/database';
 
 export default function StudentsScreen() {
     const { isDarkMode } = useTheme();
@@ -14,7 +14,7 @@ export default function StudentsScreen() {
     const navigation = useNavigation();
     const isFocused = useIsFocused();
     const [searchQuery, setSearchQuery] = useState('');
-    const [students, setStudents] = useState<Student[]>([]);
+    const [students, setStudents] = useState<DatabaseUser[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -26,8 +26,10 @@ export default function StudentsScreen() {
     const loadStudents = async () => {
         try {
             setLoading(true);
-            const data = await StudentsAPI.getAll();
-            setStudents(data);
+            const data = await UsersAPI.getAll();
+            // Filter users who are students (or not admins/super_admins)
+            const studentUsers = data.filter(u => u.role === 'student' || !u.role);
+            setStudents(studentUsers);
         } catch (error) {
             console.error(error);
         } finally {
@@ -36,14 +38,12 @@ export default function StudentsScreen() {
     };
 
     const filteredStudents = students.filter(s => {
-        const first = s.firstName || '';
-        const last = s.lastName || '';
+        const name = s.name || `${s.firstName || ''} ${s.lastName || ''}`;
         const phone = s.phone || '';
         const query = searchQuery || '';
 
         return (
-            first.toLowerCase().includes(query.toLowerCase()) ||
-            last.toLowerCase().includes(query.toLowerCase()) ||
+            name.toLowerCase().includes(query.toLowerCase()) ||
             phone.toLowerCase().includes(query.toLowerCase())
         );
     });
@@ -74,11 +74,11 @@ export default function StudentsScreen() {
                     keyExtractor={(item, index) => item.id || index.toString()}
                     renderItem={({ item }) => <StudentCard student={{
                         id: item.id!,
-                        name: `${item.firstName} ${item.lastName}`,
+                        name: item.name || `${item.firstName} ${item.lastName}`,
                         phone: item.phone,
                         currentBook: item.borrowedBookId || null,
-                        previousBooksCount: item.previousBooksCount,
-                        avatarUri: item.profilePicture,
+                        previousBooksCount: item.previousBooksCount || 0,
+                        avatarUri: item.profileImage,
                     }} />}
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
@@ -90,14 +90,7 @@ export default function StudentsScreen() {
                 />
             )}
 
-            {/* FAB - Circular plus icon as requested */}
-            <TouchableOpacity
-                style={[styles.fab, { backgroundColor: activeColors.primary }]}
-                activeOpacity={0.9}
-                onPress={() => navigation.navigate('AddStudent' as never)}
-            >
-                <Plus color={activeColors.surface} size={30} />
-            </TouchableOpacity>
+
         </View>
     );
 }

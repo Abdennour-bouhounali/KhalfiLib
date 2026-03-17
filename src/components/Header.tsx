@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image } from 'react-native';
-import { Search, Bell, BookOpen } from 'lucide-react-native';
+import { Search, Bell, BookOpen, LogOut } from 'lucide-react-native';
 import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +16,8 @@ interface HeaderProps {
     onSearchChange?: (text: string) => void;
     searchPlaceholder?: string;
     showLogo?: boolean;
+    showLogout?: boolean;
+    onLogout?: () => void;
 }
 
 export default function Header({
@@ -28,7 +30,9 @@ export default function Header({
     searchValue = '',
     onSearchChange,
     searchPlaceholder = 'ابحث هنا...',
-    showLogo = false
+    showLogo = false,
+    showLogout = false,
+    onLogout
 }: HeaderProps) {
     const { isDarkMode } = useTheme();
     const insets = useSafeAreaInsets();
@@ -82,11 +86,20 @@ export default function Header({
                         </View>
                     </View>
 
-                    {/* Left Corner (in RTL): Corporate Book Icon */}
+                    {/* Left Corner: Logout or Corporate Book Icon */}
                     <View style={styles.leftCorner}>
-                        <View style={[styles.logoContainer, isDarkMode && { backgroundColor: '#1A3A37' }]}>
-                            <BookOpen color={activeColors.primary} size={24} />
-                        </View>
+                        {showLogout ? (
+                            <TouchableOpacity
+                                style={[styles.logoutButton, isDarkMode && { backgroundColor: '#3D1C1C' }]}
+                                onPress={onLogout}
+                            >
+                                <LogOut color={isDarkMode ? '#FF5252' : COLORS.danger} size={20} />
+                            </TouchableOpacity>
+                        ) : (
+                            <View style={[styles.logoContainer, isDarkMode && { backgroundColor: '#1A3A37' }]}>
+                                <BookOpen color={activeColors.primary} size={24} />
+                            </View>
+                        )}
                     </View>
                 </>
             )}
@@ -177,5 +190,13 @@ const styles = StyleSheet.create({
     notificationButton: {
         padding: 4,
         position: 'relative',
+    },
+    logoutButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#FFEBEE',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
 });

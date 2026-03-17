@@ -13,7 +13,6 @@
     },
     "ios": {
       "supportsTablet": true,
-      "supportsRtl": true,
       "bundleIdentifier": "com.anonymous.KhalfiLib"
     },
     "android": {
@@ -24,8 +23,8 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.KhalfiLib",
-      "supportsRtl": true
+      "softwareKeyboardLayoutMode": "resize",
+      "package": "com.anonymous.KhalfiLib"
     },
     "web": {
       "favicon": "./assets/favicon.png"

@@ -1,11 +1,13 @@
 import React from 'react';
+import { View, ActivityIndicator } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Home, Book, Users, BookOpen, Settings, Layers } from 'lucide-react-native';
+import { Home, Book, Users, BookOpen, Settings, Layers, LayoutGrid, ShieldCheck as Shield, MessageCircle } from 'lucide-react-native';
 
-import { RootStackParamList, MainTabParamList } from './types';
+import { RootStackParamList, MainTabParamList, SuperAdminTabParamList, StudentTabParamList } from './types';
 import { COLORS, DARK_COLORS, FONTS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 
 import HomeScreen from '../screens/HomeScreen';
 import BooksScreen from '../screens/BooksScreen';
@@ -18,7 +20,23 @@ import FieldsScreen from '../screens/FieldsScreen';
 import BookDetailsScreen from '../screens/BookDetailsScreen';
 import StudentDetailsScreen from '../screens/StudentDetailsScreen';
 
+// Auth & New Screens
+import LoginScreen from '../screens/LoginScreen';
+import RegisterScreen from '../screens/RegisterScreen';
+import PublicCatalogScreen from '../screens/PublicCatalogScreen';
+import BookChatScreen from '../screens/BookChatScreen';
+import LibraryChatScreen from '../screens/LibraryChatScreen';
+import SuperAdminDashboard from '../screens/SuperAdminDashboard';
+import StudentHomeScreen from '../screens/StudentHomeScreen';
+import AccountStatusScreen from '../screens/AccountStatusScreen';
+import ManageSubscriptionScreen from '../screens/ManageSubscriptionScreen';
+import AdminManagementScreen from '../screens/AdminManagementScreen';
+import CatalogHubScreen from '../screens/CatalogHubScreen';
+import FloatingTabBar from '../components/FloatingTabBar';
+
 const Tab = createBottomTabNavigator<MainTabParamList>();
+const SuperAdminTab = createBottomTabNavigator<SuperAdminTabParamList>();
+const StudentTab = createBottomTabNavigator<StudentTabParamList>();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,91 +48,192 @@ function MainTabNavigator() {
 
     return (
         <Tab.Navigator
+            tabBar={(props) => <FloatingTabBar {...props} />}
             screenOptions={{
                 headerShown: false,
-                tabBarActiveTintColor: activeColors.primary,
-                tabBarInactiveTintColor: activeColors.textTertiary,
-                tabBarLabelStyle: {
-                    fontFamily: FONTS.medium,
-                    fontSize: 12,
-                },
-                tabBarStyle: {
-                    height: 60 + insets.bottom,
-                    paddingBottom: insets.bottom > 0 ? insets.bottom / 2 : 10,
-                    paddingTop: 10,
-                    backgroundColor: activeColors.surface,
-                    borderTopLeftRadius: 24,
-                    borderTopRightRadius: 24,
-                    position: 'absolute',
-                    borderTopWidth: 0,
-                    elevation: 10,
-                    shadowColor: activeColors.shadow,
-                    shadowOpacity: 0.1,
-                    shadowOffset: { width: 0, height: -2 },
-                    shadowRadius: 10,
-                },
+                tabBarHideOnKeyboard: true,
             }}
         >
             <Tab.Screen
-                name="Home"
-                component={HomeScreen}
-                options={{
-                    tabBarLabel: 'الرئيسية',
-                    tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
-                }}
-            />
-            <Tab.Screen
-                name="Books"
-                component={BooksScreen}
-                options={{
-                    tabBarLabel: 'الكتب',
-                    tabBarIcon: ({ color, size }) => <Book color={color} size={size} />,
-                }}
-            />
-            <Tab.Screen
-                name="Fields"
-                component={FieldsScreen}
-                options={{
-                    tabBarLabel: 'المجالات',
-                    tabBarIcon: ({ color, size }) => <Layers color={color} size={size} />,
-                }}
-            />
-            <Tab.Screen
-                name="Students"
-                component={StudentsScreen}
-                options={{
-                    tabBarLabel: 'الطلاب',
-                    tabBarIcon: ({ color, size }) => <Users color={color} size={size} />,
-                }}
-            />
-            <Tab.Screen
-                name="BorrowReturn"
-                component={BorrowReturnScreen}
-                options={{
-                    tabBarLabel: 'الاستعارة',
-                    tabBarIcon: ({ color, size }) => <BookOpen color={color} size={size} />,
-                }}
-            />
-            <Tab.Screen
                 name="Settings"
                 component={SettingsScreen}
-                options={{
-                    tabBarLabel: 'الإعدادات',
-                    tabBarIcon: ({ color, size }) => <Settings color={color} size={size} />,
-                }}
+                options={{ tabBarLabel: 'الإعدادات' }}
             />
+            <Tab.Screen
+                name="Security"
+                component={StudentsScreen}
+                options={{ tabBarLabel: 'الطلاب' }}
+            />
+            <Tab.Screen
+                name="Library"
+                component={CatalogHubScreen}
+                options={{ tabBarLabel: 'المكتبة' }}
+            />
+            <Tab.Screen
+                name="LibraryChat"
+                component={LibraryChatScreen}
+                options={{ tabBarLabel: 'نقاش المكتبة' }}
+            />
+
+            <Tab.Screen
+                name="Home"
+                component={HomeScreen}
+                options={{ tabBarLabel: 'الرئيسية' }}
+            />
+            {/* Hidden Management Screens */}
+            <Tab.Screen name="Books" component={BooksScreen} options={{ tabBarItemStyle: { display: 'none' } }} />
+            <Tab.Screen name="Fields" component={FieldsScreen} options={{ tabBarItemStyle: { display: 'none' } }} />
+            <Tab.Screen name="BorrowReturn" component={BorrowReturnScreen} options={{ tabBarItemStyle: { display: 'none' } }} />
+            <Tab.Screen name="PublicCatalog" component={PublicCatalogScreen} options={{ tabBarItemStyle: { display: 'none' } }} />
         </Tab.Navigator>
     );
 }
 
+function SuperAdminTabNavigator() {
+    const insets = useSafeAreaInsets();
+    const { isDarkMode } = useTheme();
+    const activeColors = isDarkMode ? DARK_COLORS : COLORS;
+
+    return (
+        <SuperAdminTab.Navigator
+            tabBar={(props) => <FloatingTabBar {...props} />}
+            screenOptions={{
+                headerShown: false,
+                tabBarHideOnKeyboard: true,
+            }}
+        >
+            <SuperAdminTab.Screen
+                name="Settings"
+                component={SettingsScreen}
+                options={{ tabBarLabel: 'الإعدادات' }}
+            />
+            <SuperAdminTab.Screen
+                name="Security"
+                component={AdminManagementScreen}
+                options={{ tabBarLabel: 'المسؤولين' }}
+            />
+            <SuperAdminTab.Screen
+                name="LibraryChat"
+                component={LibraryChatScreen}
+                options={{ tabBarLabel: 'نقاش المكتبة' }}
+            />
+
+
+            <SuperAdminTab.Screen
+                name="PublicCatalog"
+                component={PublicCatalogScreen}
+                options={{ tabBarLabel: 'الكتب' }}
+            />
+            <SuperAdminTab.Screen
+                name="Home"
+                component={SuperAdminDashboard}
+                options={{ tabBarLabel: 'الرئيسية' }}
+            />
+        </SuperAdminTab.Navigator>
+    );
+}
+
+function StudentTabNavigator() {
+    const insets = useSafeAreaInsets();
+    const { isDarkMode } = useTheme();
+    const activeColors = isDarkMode ? DARK_COLORS : COLORS;
+
+    return (
+        <StudentTab.Navigator
+            tabBar={(props) => <FloatingTabBar {...props} />}
+            screenOptions={{
+                headerShown: false,
+                tabBarHideOnKeyboard: true,
+            }}
+        >
+            <StudentTab.Screen
+                name="Home"
+                component={StudentHomeScreen}
+                options={{ tabBarLabel: 'الرئيسية' }}
+            />
+            <StudentTab.Screen
+                name="Security"
+                component={AccountStatusScreen}
+                options={{ tabBarLabel: 'حسابي' }}
+            />
+            <StudentTab.Screen
+                name="LibraryChat"
+                component={LibraryChatScreen}
+                options={{ tabBarLabel: 'نقاش المكتبة' }}
+            />
+            <StudentTab.Screen
+                name="Settings"
+                component={SettingsScreen}
+                options={{ tabBarLabel: 'الإعدادات' }}
+            />
+
+            <StudentTab.Screen
+                name="PublicCatalog"
+                component={PublicCatalogScreen}
+                options={{ tabBarItemStyle: { display: 'none' } }}
+            />
+        </StudentTab.Navigator>
+    );
+}
+
 export default function AppNavigator() {
+    const { user, isLoading } = useAuth();
+    const { isDarkMode } = useTheme();
+    const activeColors = isDarkMode ? DARK_COLORS : COLORS;
+
+    if (isLoading) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: activeColors.background }}>
+                <ActivityIndicator size="large" color={activeColors.primary} />
+            </View>
+        );
+    }
+
     return (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="MainTabs" component={MainTabNavigator} />
-            <Stack.Screen name="AddBook" component={AddBookScreen} />
-            <Stack.Screen name="AddStudent" component={AddStudentScreen} />
-            <Stack.Screen name="BookDetails" component={BookDetailsScreen} />
-            <Stack.Screen name="StudentDetails" component={StudentDetailsScreen} />
+            {user === null ? (
+                // Guest / Unauthenticated Stack
+                <>
+                    <Stack.Screen name="PublicCatalog" component={PublicCatalogScreen} />
+                    <Stack.Screen name="BookDetails" component={BookDetailsScreen} />
+                    <Stack.Screen name="Login" component={LoginScreen} />
+                    <Stack.Screen name="Register" component={RegisterScreen} />
+                    <Stack.Screen name="Settings" component={SettingsScreen} />
+                </>
+            ) : user.status !== 'active' ? (
+                // Pending / Rejected / Inactive Stack
+                <Stack.Screen name="PendingAccount" component={AccountStatusScreen} />
+            ) : user.role === 'super_admin' ? (
+                // Super Admin Stack
+                <>
+                    <Stack.Screen name="SuperAdminTabs" component={SuperAdminTabNavigator} />
+                    <Stack.Screen name="StudentDetails" component={StudentDetailsScreen} />
+                    <Stack.Screen name="ManageSubscription" component={ManageSubscriptionScreen} />
+                    <Stack.Screen name="AdminManagement" component={AdminManagementScreen} />
+                    <Stack.Screen name="BookDetails" component={BookDetailsScreen} />
+                    <Stack.Screen name="BookChat" component={BookChatScreen} />
+                    <Stack.Screen name="AddStudent" component={AddStudentScreen} />
+                </>
+            ) : user.role === 'student' ? (
+                // Student Stack
+                <>
+                    <Stack.Screen name="StudentTabs" component={StudentTabNavigator} />
+                    <Stack.Screen name="BookDetails" component={BookDetailsScreen} />
+                    <Stack.Screen name="BookChat" component={BookChatScreen} />
+                    <Stack.Screen name="AddStudent" component={AddStudentScreen} />
+                </>
+            ) : (
+                // Admin Stack
+                <>
+                    <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+                    <Stack.Screen name="AddBook" component={AddBookScreen} />
+                    <Stack.Screen name="AddStudent" component={AddStudentScreen} />
+                    <Stack.Screen name="BookDetails" component={BookDetailsScreen} />
+                    <Stack.Screen name="BookChat" component={BookChatScreen} />
+                    <Stack.Screen name="StudentDetails" component={StudentDetailsScreen} />
+                    <Stack.Screen name="ManageSubscription" component={ManageSubscriptionScreen} />
+                </>
+            )}
         </Stack.Navigator>
     );
 }

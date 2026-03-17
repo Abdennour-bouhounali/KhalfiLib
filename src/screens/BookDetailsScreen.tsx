@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Image } from 'react-native';
-import { ChevronRight, Edit3, Trash2, Calendar, Book as BookIcon, Hash, Building2, User, Printer, Star, QrCode } from 'lucide-react-native';
+import { ChevronLeft, Edit3, Trash2, Calendar, Book as BookIcon, Hash, Building2, User, Printer, Star, QrCode, MessageCircle } from 'lucide-react-native';
 import * as Print from 'expo-print';
 import QRCode from 'react-native-qrcode-svg';
 import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
@@ -10,8 +10,10 @@ import { useNavigation, useRoute, useIsFocused } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { BooksAPI, Book } from '../services/database';
+import { useAuth } from '../context/AuthContext';
 
 export default function BookDetailsScreen() {
+    const { user } = useAuth();
     const insets = useSafeAreaInsets();
     const { isDarkMode } = useTheme();
     const activeColors = isDarkMode ? DARK_COLORS : COLORS;
@@ -111,7 +113,7 @@ export default function BookDetailsScreen() {
             <View style={[styles.topBackground, { backgroundColor: isDarkMode ? activeColors.surface : COLORS.primaryLight }]}>
                 <View style={[styles.header, { paddingTop: insets.top + SPACING.s }]}>
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                        <ChevronRight color={activeColors.text} size={24} />
+                        <ChevronLeft color={activeColors.text} size={24} />
                     </TouchableOpacity>
                     <Text style={[styles.headerTitle, { color: activeColors.text }]}>تفاصيل الكتاب</Text>
                     <View style={{ width: 40 }} />
@@ -208,23 +210,26 @@ export default function BookDetailsScreen() {
                     <Text style={[styles.descriptionText, { color: activeColors.textSecondary }]}>{book.description || 'لا يوجد وصف متاح'}</Text>
                 </View>
 
-                <View style={styles.actions}>
-                    <TouchableOpacity
-                        style={[styles.actionButton, styles.editButton, { backgroundColor: activeColors.primary }]}
-                        onPress={() => navigation.navigate('AddBook', { bookId: book.id })}
-                    >
-                        <Edit3 color={activeColors.surface} size={20} />
-                        <Text style={[styles.actionButtonText, { color: activeColors.surface }]}>تعديل</Text>
-                    </TouchableOpacity>
 
-                    <TouchableOpacity
-                        style={[styles.actionButton, styles.deleteButton]}
-                        onPress={handleDelete}
-                    >
-                        <Trash2 color={activeColors.surface} size={20} />
-                        <Text style={[styles.actionButtonText, { color: activeColors.surface }]}>حذف</Text>
-                    </TouchableOpacity>
-                </View>
+                {(user?.role === 'admin' || user?.role === 'super_admin') && (
+                    <View style={styles.actions}>
+                        <TouchableOpacity
+                            style={[styles.actionButton, styles.editButton, { backgroundColor: activeColors.primary }]}
+                            onPress={() => navigation.navigate('AddBook', { bookId: book.id })}
+                        >
+                            <Edit3 color={activeColors.surface} size={20} />
+                            <Text style={[styles.actionButtonText, { color: activeColors.surface }]}>تعديل</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.actionButton, styles.deleteButton]}
+                            onPress={handleDelete}
+                        >
+                            <Trash2 color={activeColors.surface} size={20} />
+                            <Text style={[styles.actionButtonText, { color: activeColors.surface }]}>حذف</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
             </ScrollView>
         </View>
     );
@@ -241,7 +246,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     header: {
-        flexDirection: 'row',
+        flexDirection: 'row-reverse',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: SPACING.m,
@@ -326,7 +331,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     rowBetween: {
-        flexDirection: 'row',
+        flexDirection: 'row-reverse',
         justifyContent: 'space-between',
         alignItems: 'center',
     },
@@ -369,18 +374,21 @@ const styles = StyleSheet.create({
         lineHeight: 22,
     },
     actions: {
-        flexDirection: 'row',
-        marginTop: SPACING.xl,
+        flexDirection: 'row-reverse',
         gap: SPACING.m,
+        marginBottom: SPACING.xl,
     },
     actionButton: {
         flex: 1,
-        flexDirection: 'row',
-        height: 50,
-        borderRadius: RADIUS.round,
-        justifyContent: 'center',
+        flexDirection: 'row-reverse',
         alignItems: 'center',
+        justifyContent: 'center',
+        padding: SPACING.m,
+        borderRadius: RADIUS.m,
         gap: SPACING.s,
+    },
+    chatButton: {
+        width: '100%',
     },
     editButton: {
         backgroundColor: COLORS.primary,

@@ -6,8 +6,9 @@ import { ArrowRight, Check, User, Phone, Calendar } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
-import { StudentsAPI } from '../services/database';
+import { UsersAPI, User as DatabaseUser } from '../services/database';
 import { RootStackParamList } from '../navigation/types';
+import { AuthService } from '../services/AuthService';
 
 export default function AddStudentScreen() {
     const insets = useSafeAreaInsets();
@@ -15,8 +16,8 @@ export default function AddStudentScreen() {
     const activeColors = isDarkMode ? DARK_COLORS : COLORS;
     const navigation = useNavigation();
     const route = useRoute<RouteProp<RootStackParamList, 'AddStudent'>>();
-    const { studentId } = route.params || {};
-    const isEditing = !!studentId;
+    const { studentId: userId } = route.params || {};
+    const isEditing = !!userId;
 
     // Form State
     const [firstName, setFirstName] = useState('');
@@ -63,26 +64,32 @@ export default function AddStudentScreen() {
     };
 
     useEffect(() => {
-        if (studentId) {
-            loadStudentData();
+        if (userId) {
+            loadUserData();
         }
-    }, [studentId]);
+    }, [userId]);
 
-    const loadStudentData = async () => {
-        if (!studentId) return;
+    const loadUserData = async () => {
+        if (!userId) return;
         try {
-            const students = await StudentsAPI.getAll();
-            const student = students.find(s => s.id === studentId);
-            if (student) {
-                setFirstName(student.firstName);
-                setLastName(student.lastName);
-                setPhone(student.phone);
-                setBirthdate(student.birthdate);
-                setProfilePicture(student.profilePicture || null);
+            const user = await UsersAPI.getById(userId);
+            if (user) {
+                setFirstName(user.firstName || '');
+                setLastName(user.lastName || '');
+                setPhone(user.phone);
+                setBirthdate(user.birthdate || '');
+                setProfilePicture(user.profileImage || null);
+
+                // If name exists but firstName/lastName don't, try to split
+                if (!user.firstName && user.name) {
+                    const parts = user.name.split(' ');
+                    setFirstName(parts[0] || '');
+                    setLastName(parts.slice(1).join(' ') || '');
+                }
             }
         } catch (error) {
             console.error(error);
-            Alert.alert('خطأ', 'فشل تحميل بيانات الطالب');
+            Alert.alert('خطأ', 'فشل تحميل بيانات المستخدم');
         }
     };
 
@@ -94,13 +101,13 @@ export default function AddStudentScreen() {
 
         try {
             setIsSubmitting(true);
-            const studentPayload = {
+            const userPayload: Partial<DatabaseUser> = {
                 firstName,
                 lastName,
+                name: `${firstName} ${lastName}`,
                 phone,
                 birthdate,
-                profilePicture,
-                borrowedBookId: null,
+                profileImage: profilePicture || undefined,
             };
 
             // Timeout promise
@@ -109,14 +116,26 @@ export default function AddStudentScreen() {
             );
 
             // Race the save operation
-            if (isEditing && studentId) {
+            if (isEditing && userId) {
                 await Promise.race([
-                    StudentsAPI.update(studentId, { ...studentPayload, profilePicture: profilePicture || undefined }),
+                    UsersAPI.update(userId, userPayload),
                     timeoutPromise
                 ]);
             } else {
+                // For new students added by admin, we set a default password or empty one
+                // They can use a "Forgot Password" flow or we can assign one.
+                // For now, let's hash a default one like "Library123"
+                const defaultHash = await AuthService.hashPassword('Khalfi' + phone.slice(-4));
+                const newUser: Omit<DatabaseUser, 'id'> = {
+                    ...userPayload as any,
+                    passwordHash: defaultHash,
+                    role: 'student',
+                    status: 'active',
+                    borrowedBookId: null,
+                    previousBooksCount: 0,
+                };
                 await Promise.race([
-                    StudentsAPI.create({ ...studentPayload, profilePicture: profilePicture || undefined }),
+                    UsersAPI.create(newUser),
                     timeoutPromise
                 ]);
             }

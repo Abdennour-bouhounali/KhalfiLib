@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Image } from 'react-native';
-import { ChevronRight, Edit3, Trash2, Phone, Calendar, User, BookOpen, Clock } from 'lucide-react-native';
+import { ChevronRight, Edit3, Trash2, Phone, Calendar, User, BookOpen, Clock, UserCheck } from 'lucide-react-native';
 import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { StudentsAPI, Student, BooksAPI, Book } from '../services/database';
+import { BooksAPI, Book, SubscriptionsAPI, Subscription, UsersAPI, User as DatabaseUser } from '../services/database';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
+import { CreditCard, ShieldCheck, AlertCircle } from 'lucide-react-native';
 
 export default function StudentDetailsScreen() {
     const insets = useSafeAreaInsets();
@@ -15,35 +16,53 @@ export default function StudentDetailsScreen() {
     const activeColors = isDarkMode ? DARK_COLORS : COLORS;
     const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
     const route = useRoute();
-    const { studentId } = route.params as { studentId: string };
+    const { studentId: userId } = route.params as { studentId: string };
 
-    const [student, setStudent] = useState<Student | null>(null);
+    const [student, setStudent] = useState<DatabaseUser | null>(null);
     const [borrowedBook, setBorrowedBook] = useState<Book | null>(null);
+    const [subscription, setSubscription] = useState<Subscription | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         loadData();
-    }, [studentId]);
+    }, [userId]);
 
     const loadData = async () => {
         try {
             setLoading(true);
-            const students = await StudentsAPI.getAll();
-            const found = students.find(s => s.id === studentId);
-            if (found) {
-                setStudent(found);
-                if (found.borrowedBookId) {
-                    const books = await BooksAPI.getAll();
-                    const book = books.find(b => b.id === found.borrowedBookId);
+            const user = await UsersAPI.getById(userId);
+            if (user) {
+                setStudent(user);
+                const [sub, books] = await Promise.all([
+                    SubscriptionsAPI.getByUserId(userId),
+                    user.borrowedBookId ? BooksAPI.getAll() : Promise.resolve([])
+                ]);
+
+                setSubscription(sub);
+                if (user.borrowedBookId) {
+                    const book = books.find(b => b.id === user.borrowedBookId);
                     if (book) setBorrowedBook(book);
                 }
             } else {
-                Alert.alert('خطأ', 'لم يتم العثور على الطالب');
+                Alert.alert('خطأ', 'لم يتم العثور على المستخدم');
                 navigation.goBack();
             }
         } catch (error) {
             console.error(error);
-            Alert.alert('خطأ', 'فشل تحميل بيانات الطالب');
+            Alert.alert('خطأ', 'فشل تحميل بيانات المستخدم');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleApprove = async () => {
+        try {
+            setLoading(true);
+            await UsersAPI.update(userId, { status: 'active' });
+            Alert.alert('نجاح', 'تم تفعيل حساب الطالب بنجاح');
+            loadData();
+        } catch (e) {
+            Alert.alert('خطأ', 'فشل تفعيل الحساب');
         } finally {
             setLoading(false);
         }
@@ -51,8 +70,8 @@ export default function StudentDetailsScreen() {
 
     const handleDelete = () => {
         Alert.alert(
-            'حذف الطالب',
-            'هل أنت متأكد من رغبتك في حذف هذا الطالب؟ لا يمكن التراجع عن هذا الإجراء.',
+            'حذف المستخدم',
+            'هل أنت متأكد من رغبتك في حذف هذا المستخدم؟ لا يمكن التراجع عن هذا الإجراء.',
             [
                 { text: 'إلغاء', style: 'cancel' },
                 {
@@ -60,11 +79,11 @@ export default function StudentDetailsScreen() {
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            await StudentsAPI.delete(studentId);
-                            Alert.alert('نجاح', 'تم حذف الطالب بنجاح');
+                            await UsersAPI.delete(userId);
+                            Alert.alert('نجاح', 'تم حذف المستخدم بنجاح');
                             navigation.goBack();
                         } catch (e) {
-                            Alert.alert('خطأ', 'فشل حذف الطالب');
+                            Alert.alert('خطأ', 'فشل حذف المستخدم');
                         }
                     }
                 }
@@ -89,7 +108,7 @@ export default function StudentDetailsScreen() {
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                         <ChevronRight color={activeColors.text} size={24} />
                     </TouchableOpacity>
-                    <Text style={[styles.headerTitle, { color: activeColors.text }]}>تفاصيل الطالب</Text>
+                    <Text style={[styles.headerTitle, { color: activeColors.text }]}>تفاصيل المستخدم</Text>
                     <View style={{ width: 40 }} />
                 </View>
             </View>
@@ -97,14 +116,37 @@ export default function StudentDetailsScreen() {
             <ScrollView contentContainerStyle={styles.content}>
                 <View style={styles.profileCard}>
                     <View style={[styles.avatar, { backgroundColor: isDarkMode ? activeColors.surface : COLORS.primaryLight }]}>
-                        {student.profilePicture ? (
-                            <Image source={{ uri: student.profilePicture }} style={styles.avatarImage} />
+                        {student.profileImage ? (
+                            <Image source={{ uri: student.profileImage }} style={styles.avatarImage} />
                         ) : (
                             <User color={activeColors.primary} size={40} />
                         )}
                     </View>
-                    <Text style={[styles.studentName, { color: activeColors.text }]}>{`${student.firstName} ${student.lastName}`}</Text>
+                    <Text style={[styles.studentName, { color: activeColors.text }]}>{student.firstName ? `${student.firstName} ${student.lastName}` : student.name}</Text>
                     <Text style={[styles.studentId, { color: activeColors.textSecondary }]}>رقم التعريف: {student.id?.slice(-6).toUpperCase()}</Text>
+
+                    {/* Account Status Badge */}
+                    <View style={[styles.accountStatusRow, { marginTop: SPACING.s }]}>
+                        <View style={[styles.statusBadge, {
+                            backgroundColor: student.status === 'active' ? activeColors.success + '20' : activeColors.warning + '20'
+                        }]}>
+                            <Text style={[styles.statusBadgeText, {
+                                color: student.status === 'active' ? activeColors.success : activeColors.warning
+                            }]}>
+                                {student.status === 'active' ? 'حساب نشط' : 'حساب معلق'}
+                            </Text>
+                        </View>
+                    </View>
+
+                    {student.status !== 'active' && (
+                        <TouchableOpacity
+                            style={[styles.approveButton, { backgroundColor: activeColors.success, marginTop: SPACING.m }]}
+                            onPress={handleApprove}
+                        >
+                            <UserCheck color={activeColors.surface} size={20} />
+                            <Text style={[styles.approveButtonText, { color: activeColors.surface }]}>تفعيل الحساب الآن</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 <View style={[styles.infoSection, { backgroundColor: activeColors.surface }]}>
@@ -120,7 +162,7 @@ export default function StudentDetailsScreen() {
                         <Calendar color={activeColors.primary} size={20} />
                         <View style={styles.infoText}>
                             <Text style={[styles.label, { color: activeColors.textSecondary }]}>تاريخ الميلاد</Text>
-                            <Text style={[styles.value, { color: activeColors.text }]}>{student.birthdate}</Text>
+                            <Text style={[styles.value, { color: activeColors.text }]}>{student.birthdate || 'غير متوفر'}</Text>
                         </View>
                     </View>
 
@@ -135,7 +177,7 @@ export default function StudentDetailsScreen() {
 
                 <View style={[styles.statsSection, { backgroundColor: activeColors.surface }]}>
                     <View style={[styles.statBox, { borderRightColor: activeColors.border }]}>
-                        <Text style={[styles.statNumber, { color: activeColors.text }]}>{student.previousBooksCount}</Text>
+                        <Text style={[styles.statNumber, { color: activeColors.text }]}>{student.previousBooksCount || 0}</Text>
                         <Text style={[styles.statLabel, { color: activeColors.textSecondary }]}>كتب سابقة</Text>
                     </View>
                     <View style={[styles.statBox, { borderRightWidth: 0 }]}>
@@ -144,6 +186,44 @@ export default function StudentDetailsScreen() {
                         </Text>
                         <Text style={[styles.statLabel, { color: activeColors.textSecondary }]}>مستعار حالياً</Text>
                     </View>
+                </View>
+
+                {/* Subscription Section */}
+                <View style={[styles.subscriptionSection, { backgroundColor: activeColors.surface }]}>
+                    <View style={styles.sectionHeader}>
+                        <CreditCard color={activeColors.primary} size={20} />
+                        <Text style={[styles.sectionTitle, { color: activeColors.text }]}>حالة الاشتراك</Text>
+                    </View>
+
+                    {subscription ? (
+                        <View style={styles.subDetail}>
+                            <View style={[styles.statusBadge, {
+                                backgroundColor: subscription.status === 'active' ? activeColors.success + '20' : '#FFEBEE'
+                            }]}>
+                                <Text style={[styles.statusText, {
+                                    color: subscription.status === 'active' ? activeColors.success : activeColors.danger
+                                }]}>
+                                    {subscription.status === 'active' ? 'نشط' : subscription.status === 'suspended' ? 'معلق' : 'منتهي'}
+                                </Text>
+                            </View>
+                            <Text style={[styles.subDate, { color: activeColors.textSecondary }]}>
+                                ينتهي في: {new Date(subscription.endDate).toLocaleDateString('ar-EG')}
+                            </Text>
+                        </View>
+                    ) : (
+                        <View style={styles.noSubDetail}>
+                            <AlertCircle color={activeColors.textTertiary} size={20} />
+                            <Text style={[styles.noSubText, { color: activeColors.textTertiary }]}>لا يوجد اشتراك مسجل</Text>
+                        </View>
+                    )}
+
+                    <TouchableOpacity
+                        style={[styles.manageSubBtn, { borderColor: activeColors.primary }]}
+                        onPress={() => navigation.navigate('ManageSubscription', { studentId: student.id! })}
+                    >
+                        <ShieldCheck color={activeColors.primary} size={18} />
+                        <Text style={[styles.manageSubText, { color: activeColors.primary }]}>إدارة الاشتراك</Text>
+                    </TouchableOpacity>
                 </View>
 
                 {borrowedBook && (
@@ -351,5 +431,88 @@ const styles = StyleSheet.create({
         fontFamily: FONTS.bold,
         fontSize: 16,
         color: COLORS.surface,
+    },
+    subscriptionSection: {
+        marginTop: SPACING.m,
+        borderRadius: RADIUS.l,
+        padding: SPACING.l,
+        shadowColor: COLORS.shadow,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 2,
+    },
+    sectionHeader: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        marginBottom: SPACING.m,
+        gap: SPACING.s,
+    },
+    sectionTitle: {
+        fontFamily: FONTS.bold,
+        fontSize: 16,
+    },
+    subDetail: {
+        flexDirection: 'row-reverse',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: SPACING.m,
+    },
+    statusBadge: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: RADIUS.m,
+    },
+    statusText: {
+        fontFamily: FONTS.bold,
+        fontSize: 14,
+    },
+    subDate: {
+        fontFamily: FONTS.medium,
+        fontSize: 14,
+    },
+    noSubDetail: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        padding: SPACING.m,
+        gap: SPACING.s,
+        marginBottom: SPACING.m,
+    },
+    noSubText: {
+        fontFamily: FONTS.medium,
+        fontSize: 14,
+    },
+    manageSubBtn: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: 44,
+        borderRadius: RADIUS.m,
+        borderWidth: 1,
+        gap: SPACING.s,
+    },
+    manageSubText: {
+        fontFamily: FONTS.bold,
+        fontSize: 14,
+    },
+    accountStatusRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    statusBadgeText: {
+        fontFamily: FONTS.bold,
+        fontSize: 12,
+    },
+    approveButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: SPACING.l,
+        paddingVertical: 10,
+        borderRadius: RADIUS.round,
+        gap: SPACING.s,
+    },
+    approveButtonText: {
+        fontFamily: FONTS.bold,
+        fontSize: 15,
     },
 });

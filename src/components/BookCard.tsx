@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
-import { Star, Clock, User, Layers, BookOpen } from 'lucide-react-native';
+import { Star, Clock, User, Layers, BookOpen, MessageCircle } from 'lucide-react-native';
 import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import Card from './Card';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -28,6 +29,7 @@ interface BookCardProps {
 export default function BookCard({ book, onPress }: BookCardProps) {
     const { isDarkMode } = useTheme();
     const activeColors = isDarkMode ? DARK_COLORS : COLORS;
+    const { user } = useAuth();
 
     const getStatusColor = () => {
         switch (book.status) {
@@ -87,8 +89,20 @@ export default function BookCard({ book, onPress }: BookCardProps) {
                     </View>
 
                     <View style={styles.bottomRow}>
-                        <View style={[styles.statusBadge, { backgroundColor: getStatusColor() }]}>
-                            <Text style={styles.statusText}>{getStatusText()}</Text>
+                        <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
+                            <View style={[styles.statusBadge, { backgroundColor: getStatusColor() }]}>
+                                <Text style={styles.statusText}>{getStatusText()}</Text>
+                            </View>
+
+                            {user?.status === 'active' && (
+                                <TouchableOpacity
+                                    style={{ paddingVertical: 4, paddingHorizontal: 8, backgroundColor: '#388E3C', borderRadius: RADIUS.round, flexDirection: 'row', alignItems: 'center' }}
+                                    onPress={() => navigation.navigate('BookChat', { bookId: book.id })}
+                                >
+                                    <MessageCircle color={COLORS.surface} size={12} style={{ marginRight: 4 }} />
+                                    <Text style={{ color: COLORS.surface, fontSize: 10, fontFamily: FONTS.bold }}>نقاش</Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
 
                         <View style={styles.ratingContainer}>

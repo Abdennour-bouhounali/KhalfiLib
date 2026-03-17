@@ -3,10 +3,11 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { Book, Users, BookOpen, AlertTriangle, FileText, QrCode, Download, LayoutDashboard } from 'lucide-react-native';
 import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
 import Card from '../components/Card';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
-import { BooksAPI, StudentsAPI, BorrowingAPI } from '../services/database';
+import { BooksAPI, UsersAPI, BorrowingAPI } from '../services/database';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
@@ -14,6 +15,7 @@ export default function HomeScreen() {
     const navigation = useNavigation<any>();
     const isFocused = useIsFocused();
     const { isDarkMode } = useTheme();
+    const { logout } = useAuth();
     const activeColors = isDarkMode ? DARK_COLORS : COLORS;
     const [stats, setStats] = useState({
         books: 0,
@@ -26,16 +28,18 @@ export default function HomeScreen() {
 
     const loadStats = async () => {
         try {
-            const [books, students, borrowed, overdue] = await Promise.all([
+            const [books, allUsers, borrowed, overdue] = await Promise.all([
                 BooksAPI.getAll(),
-                StudentsAPI.getAll(),
+                UsersAPI.getAll(),
                 BorrowingAPI.getActiveCount(),
                 BorrowingAPI.getOverdueCount()
             ]);
 
+            const studentsCount = allUsers.filter(u => u.role === 'student' || !u.role).length;
+
             setStats({
                 books: books.length,
-                students: students.length,
+                students: studentsCount,
                 borrowed,
                 overdue
             });
@@ -189,8 +193,7 @@ export default function HomeScreen() {
                                     <td>${b.title}</td>
                                     <td>${b.author}</td>
                                     <td>${b.barcode}</td>
-                                    <td>${b.fieldName}</td>
-                                    <td>${b.isBorrowed ? 'مستعار' : 'متوفر'}</td>
+                                    <td>${b.copiesAvailable > 0 ? 'متوفر' : 'مستعار'}</td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -210,7 +213,8 @@ export default function HomeScreen() {
     const downloadStudentsList = async () => {
         try {
             setLoading(true);
-            const students = await StudentsAPI.getAll();
+            const allUsers = await UsersAPI.getAll();
+            const students = allUsers.filter(u => u.role === 'student' || !u.role);
             const html = `
                 <html>
                 <head>
@@ -228,18 +232,18 @@ export default function HomeScreen() {
                         <thead>
                             <tr>
                                 <th>اسم الطالب</th>
-                                <th>المستوى الدراسي</th>
                                 <th>رقم الهاتف</th>
-                                <th>عدد الاستعارات</th>
+                                <th>إجمالي الاستعارات السابقة</th>
+                                <th>مستعار حالياً</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${students.map(s => `
                                 <tr>
-                                    <td>${s.name}</td>
-                                    <td>${s.level}</td>
+                                    <td>${s.name || `${s.firstName || ''} ${s.lastName || ''}`}</td>
                                     <td>${s.phone}</td>
-                                    <td>${s.borrowCount || 0}</td>
+                                    <td>${s.previousBooksCount || 0}</td>
+                                    <td>${s.borrowedBookId ? 'كتاب واحد' : 'لا يوجد'}</td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -259,7 +263,16 @@ export default function HomeScreen() {
     return (
         <View style={[styles.container, { backgroundColor: activeColors.background }]}>
             <View style={[styles.topBackground, { backgroundColor: isDarkMode ? activeColors.surface : COLORS.primaryLight }]}>
-                <Header showLogo />
+                <Header
+                    showLogo
+                    showLogout
+                    onLogout={() => {
+                        Alert.alert('تسجيل الخروج', 'هل أنت متأكد من رغبتك في تسجيل الخروج؟', [
+                            { text: 'إلغاء', style: 'cancel' },
+                            { text: 'تسجيل الخروج', onPress: logout, style: 'destructive' }
+                        ]);
+                    }}
+                />
             </View>
             <ScrollView
                 contentContainerStyle={styles.scrollContent}

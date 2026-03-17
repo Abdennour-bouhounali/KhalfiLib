@@ -3,18 +3,24 @@ import { View, Text, StyleSheet, Switch, TouchableOpacity, Alert, ScrollView, Im
 import {
     Settings, Globe, Cloud, Download, ShieldAlert,
     Printer, QrCode, LogOut, Info, Shield,
-    ChevronLeft, Palette, Bell, Moon, Sun
+    ChevronLeft, Palette, Bell, Moon, Sun,
+    Edit3, Trash2
 } from 'lucide-react-native';
 import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import Header from '../components/Header';
 import Card from '../components/Card';
-import { BooksAPI } from '../services/database';
+import { BooksAPI, UsersAPI } from '../services/database';
 import * as Print from 'expo-print';
+import { useAuth } from '../context/AuthContext';
+import { useNavigation } from '@react-navigation/native';
+import { User as UserIcon, LogIn } from 'lucide-react-native';
 
 export default function SettingsScreen() {
     const { isDarkMode, toggleTheme } = useTheme();
     const activeColors = isDarkMode ? DARK_COLORS : COLORS;
+    const { user, logout } = useAuth();
+    const navigation = useNavigation<any>();
     const [autoBackup, setAutoBackup] = useState(true);
     const [isGenerating, setIsGenerating] = useState(false);
     const [isPrinting, setIsPrinting] = useState(false);
@@ -129,6 +135,29 @@ export default function SettingsScreen() {
         }
     };
 
+    const handleDeleteAccount = () => {
+        if (!user) return;
+        Alert.alert(
+            'حذف الحساب',
+            'هل أنت متأكد من رغبتك في حذف حسابك نهائياً؟ لا يمكن التراجع عن هذا الإجراء وسيتم حذف جميع بياناتك.',
+            [
+                { text: 'إلغاء', style: 'cancel' },
+                {
+                    text: 'حذف',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await UsersAPI.delete(user.id!);
+                            logout();
+                        } catch (error) {
+                            Alert.alert('خطأ', 'فشل حذف الحساب. يرجى المحاولة لاحقاً.');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const renderSettingItem = (icon: any, label: string, color: string, action?: () => void, rightElement?: React.ReactNode) => (
         <TouchableOpacity
             style={styles.settingItem}
@@ -156,14 +185,57 @@ export default function SettingsScreen() {
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 {/* Profile Section */}
                 <View style={styles.profileHeader}>
-                    <View style={[styles.logoCircle, { backgroundColor: activeColors.surface, borderColor: activeColors.border }]}>
-                        <Image source={require('../../assets/logo.png')} style={styles.headerLogo} resizeMode="contain" />
+                    <View style={[styles.logoCircle, { backgroundColor: activeColors.surface, borderColor: activeColors.border, overflow: 'hidden' }]}>
+                        {user ? (
+                            user.profileImage ? (
+                                <Image source={{ uri: user.profileImage }} style={{ width: '100%', height: '100%' }} />
+                            ) : (
+                                <UserIcon color={activeColors.primary} size={50} />
+                            )
+                        ) : (
+                            <UserIcon color={activeColors.primary} size={50} />
+                        )}
                     </View>
-                    <Text style={[styles.userName, { color: activeColors.text }]}>مسؤول المكتبة</Text>
+                    <Text style={[styles.userName, { color: activeColors.text }]}>
+                        {user ? user.name : 'زائر المكتبة'}
+                    </Text>
                     <Text style={[styles.userRole, { backgroundColor: activeColors.primary + '20', color: activeColors.textSecondary }]}>
-                        عشيرة آل خلفي
+                        {user ? (user.role === 'super_admin' ? 'المشرف العام' : user.role === 'admin' ? 'مسؤول' : 'طالب') : 'مرحباً بك'}
                     </Text>
                 </View>
+
+                {/* Profile Settings (Logged in users only) */}
+                {user && (
+                    <>
+                        <Text style={[styles.sectionTitle, { color: activeColors.textTertiary }]}>إعدادات الحساب</Text>
+                        <Card style={[styles.card, { backgroundColor: activeColors.surface, borderColor: activeColors.border }]}>
+                            {renderSettingItem(
+                                <Edit3 color={activeColors.primary} size={22} />,
+                                'تعديل الملف الشخصي',
+                                activeColors.primary,
+                                () => navigation.navigate('AddStudent', { studentId: user.id })
+                            )}
+                            <View style={[styles.divider, { backgroundColor: activeColors.border }]} />
+                            {renderSettingItem(
+                                <Trash2 color={activeColors.danger} size={22} />,
+                                'حذف الحساب',
+                                activeColors.danger,
+                                handleDeleteAccount
+                            )}
+                        </Card>
+                    </>
+                )}
+
+                {/* Guest Login */}
+                {!user && (
+                    <TouchableOpacity
+                        style={[styles.loginBtn, { backgroundColor: activeColors.primary }]}
+                        onPress={() => navigation.navigate('Login')}
+                    >
+                        <LogIn color={activeColors.surface} size={20} />
+                        <Text style={[styles.loginBtnText, { color: activeColors.surface }]}>تسجيل الدخول / إنشاء حساب</Text>
+                    </TouchableOpacity>
+                )}
 
                 {/* App Settings Group */}
                 <Text style={[styles.sectionTitle, { color: activeColors.textTertiary }]}>إعدادات التطبيق</Text>
@@ -195,36 +267,40 @@ export default function SettingsScreen() {
                     )}
                 </Card>
 
-                {/* Maintenance Section Group */}
-                <Text style={[styles.sectionTitle, { color: activeColors.textTertiary }]}>أدوات الصيانة والإدارة</Text>
-                <Card style={[styles.card, { backgroundColor: activeColors.surface, borderColor: activeColors.border }]}>
-                    {renderSettingItem(
-                        <QrCode color={activeColors.primary} size={22} />,
-                        isGenerating ? 'جاري التوليد...' : 'توليد رموز QR المفقودة',
-                        activeColors.primary,
-                        generateMissingQRs
-                    )}
-                    <View style={[styles.divider, { backgroundColor: activeColors.border }]} />
-                    {renderSettingItem(
-                        <Printer color="#27ae60" size={22} />,
-                        isPrinting ? 'جاري التحضير...' : 'طباعة ملصقات QR المجمعة',
-                        '#27ae60',
-                        printAllQRs
-                    )}
-                    <View style={[styles.divider, { backgroundColor: activeColors.border }]} />
-                    {renderSettingItem(
-                        <Cloud color="#2980b9" size={22} />,
-                        'نسخ احتياطي تلقائي',
-                        '#2980b9',
-                        () => setAutoBackup(!autoBackup),
-                        <Switch
-                            value={autoBackup}
-                            onValueChange={setAutoBackup}
-                            trackColor={{ false: activeColors.border, true: activeColors.primary + '50' }}
-                            thumbColor={autoBackup ? activeColors.primary : COLORS.surface}
-                        />
-                    )}
-                </Card>
+                {/* Maintenance Section Group - Admin Only */}
+                {(user?.role === 'admin' || user?.role === 'super_admin') && (
+                    <>
+                        <Text style={[styles.sectionTitle, { color: activeColors.textTertiary }]}>أدوات الصيانة والإدارة</Text>
+                        <Card style={[styles.card, { backgroundColor: activeColors.surface, borderColor: activeColors.border }]}>
+                            {renderSettingItem(
+                                <QrCode color={activeColors.primary} size={22} />,
+                                isGenerating ? 'جاري التوليد...' : 'توليد رموز QR المفقودة',
+                                activeColors.primary,
+                                generateMissingQRs
+                            )}
+                            <View style={[styles.divider, { backgroundColor: activeColors.border }]} />
+                            {renderSettingItem(
+                                <Printer color="#27ae60" size={22} />,
+                                isPrinting ? 'جاري التحضير...' : 'طباعة ملصقات QR المجمعة',
+                                '#27ae60',
+                                printAllQRs
+                            )}
+                            <View style={[styles.divider, { backgroundColor: activeColors.border }]} />
+                            {renderSettingItem(
+                                <Cloud color="#2980b9" size={22} />,
+                                'نسخ احتياطي تلقائي',
+                                '#2980b9',
+                                () => setAutoBackup(!autoBackup),
+                                <Switch
+                                    value={autoBackup}
+                                    onValueChange={setAutoBackup}
+                                    trackColor={{ false: activeColors.border, true: activeColors.primary + '50' }}
+                                    thumbColor={autoBackup ? activeColors.primary : COLORS.surface}
+                                />
+                            )}
+                        </Card>
+                    </>
+                )}
 
                 {/* Rules Section Group */}
                 <Text style={[styles.sectionTitle, { color: activeColors.textTertiary }]}>القواعد والخصوصية</Text>
@@ -255,10 +331,12 @@ export default function SettingsScreen() {
                     )}
                 </Card>
 
-                <TouchableOpacity style={styles.logoutButton}>
-                    <LogOut color={COLORS.danger} size={20} />
-                    <Text style={styles.logoutText}>تسجيل الخروج</Text>
-                </TouchableOpacity>
+                {user && (
+                    <TouchableOpacity style={styles.logoutButton} onPress={logout}>
+                        <LogOut color={COLORS.danger} size={20} />
+                        <Text style={styles.logoutText}>تسجيل الخروج</Text>
+                    </TouchableOpacity>
+                )}
 
                 <View style={{ height: 120 }} />
             </ScrollView>
@@ -394,5 +472,19 @@ const styles = StyleSheet.create({
         fontFamily: FONTS.bold,
         fontSize: 16,
         color: COLORS.danger,
+    },
+    loginBtn: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginHorizontal: SPACING.m,
+        height: 50,
+        borderRadius: RADIUS.m,
+        gap: SPACING.s,
+        marginTop: SPACING.m,
+    },
+    loginBtnText: {
+        fontFamily: FONTS.bold,
+        fontSize: 16,
     },
 });

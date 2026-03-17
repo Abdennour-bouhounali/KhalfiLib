@@ -5,6 +5,8 @@ import { useFonts, Tajawal_400Regular, Tajawal_500Medium, Tajawal_700Bold } from
 import * as SplashScreen from 'expo-splash-screen';
 import AppNavigator from './src/navigation/AppNavigator';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
+import { AuthProvider } from './src/context/AuthContext';
+import { SeedService } from './src/services/SeedService';
 
 function AppContent() {
   const { isDarkMode } = useTheme();
@@ -39,6 +41,7 @@ export default function App() {
   useEffect(() => {
     if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
+      SeedService.seedSuperAdmin();
     }
   }, [fontsLoaded, fontError]);
 
@@ -48,7 +51,9 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      <AppContent />
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
     </ThemeProvider>
   );
 }

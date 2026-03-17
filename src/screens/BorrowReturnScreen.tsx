@@ -6,11 +6,13 @@ import { useTheme } from '../theme/ThemeContext';
 import Header from '../components/Header';
 import { ref, get } from 'firebase/database';
 import { db } from '../services/firebase';
-import { BooksAPI, BorrowingAPI, StudentsAPI } from '../services/database';
+import { BooksAPI, BorrowingAPI, UsersAPI } from '../services/database';
+import { useAuth } from '../context/AuthContext';
 
 export default function BorrowReturnScreen() {
     const { isDarkMode } = useTheme();
     const activeColors = isDarkMode ? DARK_COLORS : COLORS;
+    const { user: currentUser } = useAuth();
     const [hasPermission, setHasPermission] = useState<boolean | null>(null);
     const [scanned, setScanned] = useState(false);
     const [mode, setMode] = useState<'borrow' | 'return'>('borrow');
@@ -39,18 +41,21 @@ export default function BorrowReturnScreen() {
                 return;
             }
 
-            // In a complete implementation, you would open a Modal here to select the Student
-            // For now, let's fetch the first student as a mock select
-            const students = await StudentsAPI.getAll();
-            if (students.length === 0) {
-                Alert.alert('خطأ', 'يرجى إضافة طالب أولاً لإجراء عملية الاستعارة');
+            // Fetch all active users (students/admins) who can borrow
+            const allUsers = await UsersAPI.getAll();
+            const activeUsers = allUsers.filter(u => u.status === 'active');
+
+            if (activeUsers.length === 0) {
+                Alert.alert('خطأ', 'يرجى إضافة مستخدم أولاً لإجراء عملية الاستعارة');
                 return;
             }
-            const selectedStudent = students[0];
+
+            // In a real app, show a picker. For now, we use a placeholder select or the current user if they are a student
+            const selectedUser = currentUser?.role === 'student' ? currentUser : activeUsers[0];
 
             Alert.alert(
                 'تأكيد الاستعارة',
-                `هل تريد استعارة "${book.title}" للطالب "${selectedStudent.firstName}"؟`,
+                `هل تريد استعارة "${book.title}" للمستخدم "${selectedUser.firstName || selectedUser.name}"؟`,
                 [
                     { text: 'إلغاء', style: 'cancel' },
                     {
@@ -58,7 +63,7 @@ export default function BorrowReturnScreen() {
                         onPress: async () => {
                             try {
                                 setIsProcessing(true);
-                                await BorrowingAPI.borrowBook(selectedStudent.id!, book.id!, 14); // 14 days
+                                await BorrowingAPI.borrowBook(selectedUser.id!, book.id!, 14); // 14 days
                                 Alert.alert('نجاح', 'تم تسجيل استعارة الكتاب بنجاح');
                             } catch (e) {
                                 console.error(e);
@@ -88,11 +93,11 @@ export default function BorrowReturnScreen() {
                 return;
             }
 
-            // Find the active borrow record for this book
+            // Find the active borrow record for this book (using userId)
             const recordsRef = ref(db, 'borrowRecords');
             const snapshot = await get(recordsRef);
             let activeRecord: any = null;
-            let studentId: string = '';
+            let userId: string = '';
 
             if (snapshot.exists()) {
                 const records = snapshot.val();
@@ -100,7 +105,7 @@ export default function BorrowReturnScreen() {
                     records[key].bookId === book.id && !records[key].returnDate
                 );
                 if (activeRecord) {
-                    studentId = records[activeRecord].studentId;
+                    userId = records[activeRecord].userId;
                 }
             }
 
@@ -119,7 +124,8 @@ export default function BorrowReturnScreen() {
                         onPress: async () => {
                             try {
                                 setIsProcessing(true);
-                                await BorrowingAPI.returnBook(studentId, book.id!, activeRecord);
+                                // Pass current user ID as the one processing the return
+                                await BorrowingAPI.returnBook(userId, book.id!, activeRecord, currentUser?.id);
                                 Alert.alert('نجاح', 'تم تسجيل إرجاع الكتاب واستلامه. شكراً!');
                             } catch (e) {
                                 console.error(e);
