@@ -3,15 +3,22 @@ import { I18nManager, StatusBar } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { useFonts, Tajawal_400Regular, Tajawal_500Medium, Tajawal_700Bold } from '@expo-google-fonts/tajawal';
 import * as SplashScreen from 'expo-splash-screen';
+import * as Updates from 'expo-updates';
 import AppNavigator from './src/navigation/AppNavigator';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { AuthProvider } from './src/context/AuthContext';
 import { SeedService } from './src/services/SeedService';
-
+import { CacheSyncService } from './src/services/CacheSyncService';
 import NotificationHandler from './src/components/NotificationHandler';
 
 function AppContent() {
   const { isDarkMode } = useTheme();
+
+  useEffect(() => {
+    // Initialize real-time cache sync
+    const stopSync = CacheSyncService.startSync();
+    return () => stopSync();
+  }, []);
 
   return (
     <>
@@ -27,11 +34,11 @@ function AppContent() {
 SplashScreen.preventAutoHideAsync();
 
 export default function App() {
-  // Enforce RTL
   useEffect(() => {
     if (!I18nManager.isRTL) {
       I18nManager.allowRTL(true);
       I18nManager.forceRTL(true);
+      Updates.reloadAsync();
     }
   }, []);
 

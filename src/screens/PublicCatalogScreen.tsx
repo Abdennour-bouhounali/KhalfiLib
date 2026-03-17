@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, Text, ActivityIndicator, SafeAreaView, Platform, Image, ScrollView, Modal, TextInput } from 'react-native';
+import { View, StyleSheet, FlatList, TouchableOpacity, Text, ActivityIndicator, SafeAreaView, Platform, Image, ScrollView, Modal, TextInput, RefreshControl } from 'react-native';
 import { LogIn, UserPlus, BookOpen, ArrowRight, Plus, Search, Filter, X, Check, ChevronDown } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
@@ -29,15 +29,19 @@ export default function PublicCatalogScreen() {
 
     const AGE_CATEGORIES = ['أطفال', 'إبتدائي', 'متوسط', 'ثانوي', 'جامعي', 'بحث علمي'];
 
+    const [refreshing, setRefreshing] = useState(false);
+
     useEffect(() => {
         if (isFocused) {
             loadData();
         }
     }, [isFocused]);
 
-    const loadData = async () => {
+    const loadData = async (isManualRefresh = false) => {
         try {
-            setLoading(true);
+            if (isManualRefresh) setRefreshing(true);
+            else setLoading(true);
+
             const [booksData, fieldsData] = await Promise.all([
                 BooksAPI.getAll(),
                 FieldsAPI.getAll()
@@ -48,7 +52,12 @@ export default function PublicCatalogScreen() {
             console.error(error);
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
+    };
+
+    const onRefresh = () => {
+        loadData(true);
     };
 
     const getFieldTitle = (fieldId: string) => {
@@ -242,7 +251,10 @@ export default function PublicCatalogScreen() {
             ) : (
                 <FlatList
                     data={filteredBooks}
-                    keyExtractor={(item, index) => item.id || index.toString()}
+                    keyExtractor={item => item.id || ''}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[activeColors.primary]} />
+                    }
                     renderItem={({ item }) => <BookCard book={{
                         id: !!item.id ? item.id : '',
                         title: item.title,

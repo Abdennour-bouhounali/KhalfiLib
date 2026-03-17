@@ -21,7 +21,7 @@ export default function NotificationHandler() {
     const currentVersion = appConfig.expo.version;
 
     const isVersionNewer = (notifVersion?: string) => {
-        if (!notifVersion) return true; // Default to showing if no version specified
+        if (!notifVersion) return false; // Default to NOT showing if no version is specified (prevents spam for old records)
 
         const current = currentVersion.split('.').map(Number);
         const notif = notifVersion.split('.').map(Number);
@@ -162,8 +162,8 @@ const styles = StyleSheet.create({
     },
     title: {
         fontFamily: FONTS.bold,
-        fontSize: 20,
-        textAlign: 'center',
+        fontSize: 25,
+        textAlign: 'right',
         marginBottom: SPACING.s,
     },
     message: {

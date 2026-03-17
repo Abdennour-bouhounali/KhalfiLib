@@ -44,23 +44,14 @@ jobs:
       - name: Build Release APK
         run: |
           cd android
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
 
       - name: Prepare APKs for Release
         run: |
           mkdir -p release-apks
-          # Find all generated APKs and copy them with better names
-          find android/app/build/outputs/apk/release/ -name "*.apk" | while read -r apk; do
-            filename=$(basename "$apk")
-            if [[ "$filename" == *"universal"* ]]; then
-              cp "$apk" "library-app-v${{ env.VERSION_NAME }}-universal.apk"
-            elif [[ "$filename" == *"arm64-v8a"* ]]; then
-              cp "$apk" "library-app-v${{ env.VERSION_NAME }}-arm64.apk"
-            elif [[ "$filename" == *"armeabi-v7a"* ]]; then
-              cp "$apk" "library-app-v${{ env.VERSION_NAME }}-armv7.apk"
-            else
-              cp "$apk" "library-app-v${{ env.VERSION_NAME }}-${filename}"
-            fi
+          # Only copy the arm64-v8a APK as requested
+          find android/app/build/outputs/apk/release/ -name "*arm64-v8a*.apk" | while read -r apk; do
+            cp "$apk" "library-app-v${{ env.VERSION_NAME }}-arm64.apk"
           done
 
       - name: Create Release and Upload Assets
@@ -71,15 +62,13 @@ jobs:
           body: |
             ### 🚀 Optimized Release v${{ env.VERSION_NAME }}
             
-            This release includes multiple APK versions to save space:
-            - **Universal**: ~45MB (Works on all devices)
+            This release is optimized for modern devices (arm64-v8a).
             - **Arm64**: ~25MB (Recommended for most modern phones)
-            - **Armv7**: ~25MB (For older phones)
             
             **Changes:**
+            - Optimized build for arm64-v8a architecture only.
             - Enabled R8/Minification to reduce code size.
             - Enabled Resource Shrinking.
-            - Split APKs by architecture.
           files: library-app-v${{ env.VERSION_NAME }}-*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

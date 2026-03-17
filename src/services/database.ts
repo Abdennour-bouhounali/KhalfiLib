@@ -1,5 +1,6 @@
 import { ref, get, push, update, remove, query, orderByChild, equalTo, set, onValue, off } from 'firebase/database';
 import { db } from './firebase';
+import { StorageService } from './StorageService';
 
 // ==========================================
 // MODELS (TypeScript Interfaces)
@@ -151,12 +152,18 @@ export const BookLogic = {
 export const FieldsAPI = {
     getAll: async (): Promise<Field[]> => {
         try {
+            // 1. Get from cache first
+            const cached = await StorageService.getCollection<Field>('fields');
+
+            // 2. Fetch from Firebase in background to update cache
             const fieldsRef = ref(db, 'fields');
-            const snapshot = await get(fieldsRef);
-            if (snapshot.exists()) {
-                return objectToArray<Field>(snapshot.val());
-            }
-            return [];
+            get(fieldsRef).then(snapshot => {
+                if (snapshot.exists()) {
+                    StorageService.saveCollection('fields', objectToArray<Field>(snapshot.val()));
+                }
+            });
+
+            return cached;
         } catch (error) {
             console.error(`[FieldsAPI] getAll failed:`, error);
             throw error;
@@ -201,12 +208,18 @@ export const FieldsAPI = {
 export const BooksAPI = {
     getAll: async (): Promise<Book[]> => {
         try {
+            // 1. Get from cache first
+            const cached = await StorageService.getCollection<Book>('books');
+
+            // 2. Fetch from Firebase in background
             const booksRef = ref(db, 'books');
-            const snapshot = await get(booksRef);
-            if (snapshot.exists()) {
-                return objectToArray<Book>(snapshot.val());
-            }
-            return [];
+            get(booksRef).then(snapshot => {
+                if (snapshot.exists()) {
+                    StorageService.saveCollection('books', objectToArray<Book>(snapshot.val()));
+                }
+            });
+
+            return cached;
         } catch (error) {
             console.error(`[BooksAPI] getAll failed:`, error);
             throw error;
@@ -364,13 +377,19 @@ export const UsersAPI = {
 
     getAll: async (role?: UserRole): Promise<User[]> => {
         try {
+            // 1. Get from cache first
+            const cached = await StorageService.getCollection<User>('users');
+            const filteredCache = role ? cached.filter(u => u.role === role) : cached;
+
+            // 2. Fetch from Firebase in background
             const usersRef = ref(db, 'users');
-            const snapshot = await get(usersRef);
-            if (snapshot.exists()) {
-                const users = objectToArray<User>(snapshot.val());
-                return role ? users.filter(u => u.role === role) : users;
-            }
-            return [];
+            get(usersRef).then(snapshot => {
+                if (snapshot.exists()) {
+                    StorageService.saveCollection('users', objectToArray<User>(snapshot.val()));
+                }
+            });
+
+            return filteredCache;
         } catch (error) {
             console.error(`[UsersAPI] getAll failed:`, error);
             throw error;
@@ -810,15 +829,21 @@ export const LibraryChatAPI = {
 export const NotificationsAPI = {
     getAll: async (): Promise<AppNotification[]> => {
         try {
+            // 1. Get from cache first
+            const cached = await StorageService.getCollection<AppNotification>('notifications');
+            const sortedCache = cached.sort((a, b) =>
+                new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            );
+
+            // 2. Fetch from Firebase in background
             const notifsRef = ref(db, 'notifications');
-            const snapshot = await get(notifsRef);
-            if (snapshot.exists()) {
-                const data = snapshot.val();
-                return objectToArray<AppNotification>(data).sort((a, b) =>
-                    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-                );
-            }
-            return [];
+            get(notifsRef).then(snapshot => {
+                if (snapshot.exists()) {
+                    StorageService.saveCollection('notifications', objectToArray<AppNotification>(snapshot.val()));
+                }
+            });
+
+            return sortedCache;
         } catch (error) {
             console.error('[NotificationsAPI] getAll failed:', error);
             throw error;
@@ -865,6 +890,48 @@ export const NotificationsAPI = {
         } catch (error) {
             console.error('[NotificationsAPI] isSeen failed:', error);
             return false;
+        }
+    },
+
+    markAsDeleted: async (userId: string, notifId: string): Promise<void> => {
+        try {
+            const deletedRef = ref(db, `userNotifications/${userId}/deleted/${notifId}`);
+            await set(deletedRef, true);
+        } catch (error) {
+            console.error('[NotificationsAPI] markAsDeleted failed:', error);
+            throw error;
+        }
+    },
+
+    getDeletedIds: async (userId: string): Promise<string[]> => {
+        try {
+            const deletedRef = ref(db, `userNotifications/${userId}/deleted`);
+            const snapshot = await get(deletedRef);
+            return snapshot.exists() ? Object.keys(snapshot.val()) : [];
+        } catch (error) {
+            console.error('[NotificationsAPI] getDeletedIds failed:', error);
+            return [];
+        }
+    },
+
+    deleteGlobally: async (notifId: string): Promise<void> => {
+        try {
+            const notifRef = ref(db, `notifications/${notifId}`);
+            await remove(notifRef);
+        } catch (error) {
+            console.error('[NotificationsAPI] deleteGlobally failed:', error);
+            throw error;
+        }
+    },
+
+    getSeenIds: async (userId: string): Promise<string[]> => {
+        try {
+            const seenRef = ref(db, `userNotifications/${userId}/seen`);
+            const snapshot = await get(seenRef);
+            return snapshot.exists() ? Object.keys(snapshot.val()) : [];
+        } catch (error) {
+            console.error('[NotificationsAPI] getSeenIds failed:', error);
+            return [];
         }
     }
 };

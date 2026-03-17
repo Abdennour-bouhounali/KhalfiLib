@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, FlatList, TouchableOpacity, Text, ActivityIndicator, RefreshControl } from 'react-native';
 import { Filter, Plus } from 'lucide-react-native';
 import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
@@ -17,6 +17,7 @@ export default function BooksScreen() {
     const [books, setBooks] = useState<Book[]>([]);
     const [fields, setFields] = useState<Field[]>([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
 
     useEffect(() => {
         if (isFocused) {
@@ -24,9 +25,11 @@ export default function BooksScreen() {
         }
     }, [isFocused]);
 
-    const loadData = async () => {
+    const loadData = async (isManualRefresh = false) => {
         try {
-            setLoading(true);
+            if (isManualRefresh) setRefreshing(true);
+            else setLoading(true);
+
             const [booksData, fieldsData] = await Promise.all([
                 BooksAPI.getAll(),
                 FieldsAPI.getAll()
@@ -37,7 +40,12 @@ export default function BooksScreen() {
             console.error(error);
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
+    };
+
+    const onRefresh = () => {
+        loadData(true);
     };
 
     const getFieldTitle = (fieldId: string) => {
@@ -84,6 +92,9 @@ export default function BooksScreen() {
                 <FlatList
                     data={filteredBooks}
                     keyExtractor={(item, index) => item.id || index.toString()}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[activeColors.primary]} />
+                    }
                     renderItem={({ item }) => <BookCard book={{
                         id: !!item.id ? item.id : '',
                         title: item.title,

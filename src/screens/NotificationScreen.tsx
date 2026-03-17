@@ -1,30 +1,76 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, Linking, ActivityIndicator } from 'react-native';
-import { Bell, Info, AlertTriangle, ExternalLink, Calendar, ChevronRight } from 'lucide-react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, Linking, ActivityIndicator, Alert } from 'react-native';
+import { Bell, Info, AlertTriangle, ExternalLink, Calendar, ChevronRight, X } from 'lucide-react-native';
 import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import Header from '../components/Header';
 import Card from '../components/Card';
 import { NotificationsAPI, AppNotification } from '../services/database';
 import { useAuth } from '../context/AuthContext';
+import appConfig from '../../app.json';
 
 export default function NotificationScreen() {
     const { isDarkMode } = useTheme();
     const { user } = useAuth();
     const activeColors = isDarkMode ? DARK_COLORS : COLORS;
-    const [notifications, setNotifications] = useState<AppNotification[]>([]);
+    const [notifications, setNotifications] = useState<(AppNotification & { isRead?: boolean })[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
+    const currentVersion = appConfig.expo.version;
+
+    const isVersionNewer = (notifVersion?: string) => {
+        if (!notifVersion) return false;
+
+        const current = currentVersion.split('.').map(Number);
+        const notif = notifVersion.split('.').map(Number);
+
+        for (let i = 0; i < Math.max(current.length, notif.length); i++) {
+            const v1 = current[i] || 0;
+            const v2 = notif[i] || 0;
+            if (v2 > v1) return true;
+            if (v2 < v1) return false;
+        }
+        return false;
+    };
+
     const loadNotifications = async () => {
         try {
-            const data = await NotificationsAPI.getAll();
-            setNotifications(data);
+            const [data, deletedIds, seenIds] = await Promise.all([
+                NotificationsAPI.getAll(),
+                user?.id ? NotificationsAPI.getDeletedIds(user.id) : Promise.resolve([]),
+                user?.id ? NotificationsAPI.getSeenIds(user.id) : Promise.resolve([])
+            ]);
 
-            // Mark all fetched notifications as seen if they have an ID
-            if (user?.id && data.length > 0) {
-                const unseen = data.filter((n): n is AppNotification & { id: string } => !!n.id);
-                await Promise.all(unseen.map(n => NotificationsAPI.markAsSeen(user.id, n.id)));
+            // 1. Filter out deleted ones locally for the user
+            const nonDeleted = data.filter(n => !deletedIds.includes(n.id!));
+
+            // 2. Filter out update notifications that are older or equal to current version
+            const versionFiltered = nonDeleted.filter(n =>
+                n.type !== 'update' || isVersionNewer(n.version)
+            );
+
+            // 3. Remove duplicates (same title and message)
+            const uniqueData = versionFiltered.filter((n, idx, self) =>
+                idx === self.findIndex(t => (
+                    t.title === n.title && t.message === n.message && t.version === n.version
+                ))
+            );
+
+            // 4. Map with read status
+            const withReadStatus = uniqueData.map(n => ({
+                ...n,
+                isRead: seenIds.includes(n.id!)
+            }));
+
+            setNotifications(withReadStatus);
+
+            // Mark fetched notifications as seen in background
+            if (user?.id && uniqueData.length > 0) {
+                const unseenIds = uniqueData.filter(n => !seenIds.includes(n.id!)).map(n => n.id!);
+                if (unseenIds.length > 0) {
+                    await Promise.all(unseenIds.map(id => NotificationsAPI.markAsSeen(user.id, id)));
+                }
             }
         } catch (error) {
             console.error('[NotificationScreen] Failed to load notifications:', error);
@@ -43,6 +89,36 @@ export default function NotificationScreen() {
         loadNotifications();
     };
 
+    const handleDelete = async (notifId: string) => {
+        if (!user?.id || !notifId) return;
+
+        try {
+            if (user.role === 'admin' || user.role === 'super_admin') {
+                Alert.alert(
+                    'حذف الإشعار',
+                    'هل أنت متأكد من حذف هذا الإشعار نهائياً للجميع؟',
+                    [
+                        { text: 'إلغاء', style: 'cancel' },
+                        {
+                            text: 'حذف',
+                            style: 'destructive',
+                            onPress: async () => {
+                                await NotificationsAPI.deleteGlobally(notifId);
+                                setNotifications(prev => prev.filter(n => n.id !== notifId));
+                            }
+                        }
+                    ]
+                );
+            } else {
+                // For students, just hide it locally
+                await NotificationsAPI.markAsDeleted(user.id, notifId);
+                setNotifications(prev => prev.filter(n => n.id !== notifId));
+            }
+        } catch (error) {
+            console.error('Error deleting notification:', error);
+        }
+    };
+
     const handleLink = async (link?: string) => {
         if (!link) return;
         try {
@@ -58,13 +134,12 @@ export default function NotificationScreen() {
     const formatDate = (dateString: string) => {
         try {
             const date = new Date(dateString);
-            return date.toLocaleDateString('ar-EG', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
+            const d = date.getDate().toString().padStart(2, '0');
+            const mo = (date.getMonth() + 1).toString().padStart(2, '0');
+            const y = date.getFullYear();
+            const h = date.getHours().toString().padStart(2, '0');
+            const mi = date.getMinutes().toString().padStart(2, '0');
+            return `${d}/${mo}/${y} ${h}:${mi}`;
         } catch (e) {
             return dateString;
         }
@@ -78,14 +153,34 @@ export default function NotificationScreen() {
         }
     };
 
-    const renderItem = ({ item }: { item: AppNotification }) => (
-        <Card style={[styles.notifCard, { backgroundColor: activeColors.surface, borderColor: activeColors.border }]}>
+    const renderItem = ({ item }: { item: AppNotification & { isRead?: boolean } }) => (
+        <Card style={[
+            styles.notifCard,
+            { backgroundColor: activeColors.surface, borderColor: activeColors.border },
+            !item.isRead && styles.unreadCard
+        ]}>
+            {!item.isRead && <View style={styles.unreadDot} />}
+
+            <TouchableOpacity
+                style={styles.deleteBtn}
+                onPress={() => handleDelete(item.id!)}
+            >
+                <X size={16} color={activeColors.textTertiary} />
+            </TouchableOpacity>
+
             <View style={styles.cardHeader}>
                 <View style={[styles.iconBox, { backgroundColor: isDarkMode ? '#2C2C2C' : '#F5F5F7' }]}>
                     {getIcon(item.type)}
                 </View>
                 <View style={styles.headerText}>
-                    <Text style={[styles.notifTitle, { color: activeColors.text }]}>{item.title}</Text>
+                    <View style={styles.titleRow}>
+                        <Text style={[styles.notifTitle, { color: activeColors.text }]}>{item.title}</Text>
+                        {!item.isRead && (
+                            <View style={[styles.newBadge, { backgroundColor: activeColors.primary }]}>
+                                <Text style={styles.newBadgeText}>جديد</Text>
+                            </View>
+                        )}
+                    </View>
                     <View style={styles.dateBox}>
                         <Calendar size={12} color={activeColors.textTertiary} />
                         <Text style={[styles.notifDate, { color: activeColors.textTertiary }]}>{formatDate(item.createdAt)}</Text>
@@ -167,9 +262,46 @@ const styles = StyleSheet.create({
         padding: SPACING.m,
         marginBottom: SPACING.m,
         borderWidth: 1,
+        position: 'relative',
+    },
+    unreadCard: {
+        borderLeftWidth: 4,
+        borderLeftColor: '#3B82F6',
+    },
+    unreadDot: {
+        position: 'absolute',
+        top: 12,
+        right: 12,
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: '#3B82F6',
+        zIndex: 10,
+    },
+    deleteBtn: {
+        position: 'absolute',
+        top: 8,
+        left: 8,
+        padding: 4,
+        zIndex: 10,
+    },
+    titleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: SPACING.s,
+    },
+    newBadge: {
+        paddingHorizontal: 6,
+        paddingVertical: 1,
+        borderRadius: RADIUS.s,
+    },
+    newBadgeText: {
+        color: '#FFFFFF',
+        fontSize: 10,
+        fontFamily: FONTS.bold,
     },
     cardHeader: {
-        flexDirection: 'row-reverse',
+        flexDirection: 'row',
         alignItems: 'center',
         marginBottom: SPACING.s,
     },
@@ -179,11 +311,11 @@ const styles = StyleSheet.create({
         borderRadius: RADIUS.m,
         justifyContent: 'center',
         alignItems: 'center',
-        marginLeft: SPACING.m,
+        marginRight: SPACING.m,
     },
     headerText: {
         flex: 1,
-        alignItems: 'flex-end',
+        alignItems: 'flex-start',
     },
     notifTitle: {
         fontFamily: FONTS.bold,
@@ -192,13 +324,13 @@ const styles = StyleSheet.create({
         textAlign: 'right',
     },
     dateBox: {
-        flexDirection: 'row-reverse',
+        flexDirection: 'row',
         alignItems: 'center',
     },
     notifDate: {
         fontFamily: FONTS.regular,
         fontSize: 12,
-        marginRight: 4,
+        marginLeft: 4,
     },
     notifMessage: {
         fontFamily: FONTS.regular,
@@ -208,17 +340,15 @@ const styles = StyleSheet.create({
         marginVertical: SPACING.s,
     },
     linkButton: {
-        flexDirection: 'row-reverse',
-        alignItems: 'center',
-        justifyContent: 'center',
+        flexDirection: 'row',
         paddingVertical: 10,
         borderRadius: RADIUS.s,
         marginTop: SPACING.s,
+        gap: SPACING.s,
     },
     linkText: {
         fontFamily: FONTS.bold,
         fontSize: 14,
-        marginLeft: SPACING.s,
     },
     emptyText: {
         fontFamily: FONTS.medium,
