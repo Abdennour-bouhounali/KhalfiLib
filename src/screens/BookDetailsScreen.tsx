@@ -121,11 +121,7 @@ export default function BookDetailsScreen() {
             </View>
 
             <ScrollView contentContainerStyle={styles.content}>
-                {book.coverImage && (
-                    <View style={styles.coverContainer}>
-                        <Image source={{ uri: book.coverImage }} style={styles.coverImage} resizeMode="contain" />
-                    </View>
-                )}
+
                 <View style={[styles.card, { backgroundColor: activeColors.surface }]}>
                     <View style={styles.infoRow}>
                         <BookIcon color={activeColors.primary} size={24} />
