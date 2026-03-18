@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Text, TextInput, TouchableOpacity, FlatList, Image, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView, Keyboard } from 'react-native';
+import { ref, push } from 'firebase/database';
+import { db } from '../services/firebase';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { ArrowLeft, Camera, Image as ImageIcon, Smile, Send, Star, MessageSquare, Quote as QuoteIcon, HelpCircle, Lightbulb, BookOpen, User as UserIcon, MessageCircle, X, ChevronRight } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -50,30 +52,32 @@ export default function BookChatScreen() {
     const [selectedMessage, setSelectedMessage] = useState<ChatMessage | null>(null);
     const [isOptionsVisible, setIsOptionsVisible] = useState(false);
 
+    const [offset, setOffset] = useState(0);
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+
     const flatListRef = useRef<FlatList>(null);
     const usersMapRef = useRef<Record<string, User>>({});
     const QUICK_EMOJIS = ['😂', '❤️', '😍', '👍', '🙏', '🔥', '🥰', '😊', '🤔', '📚', '🎉', '💪'];
 
     useEffect(() => {
         loadData();
-        const unsubscribe = ChatAPI.listenToMessages(bookId, (msgs) => {
-            setMessages(msgs);
-            const uids = new Set<string>();
-            msgs.forEach(m => uids.add(m.userId));
-            setParticipantCount(uids.size);
+        loadInitialMessages();
 
-            uids.forEach(uid => {
-                if (!usersMapRef.current[uid]) {
-                    UsersAPI.getById(uid).then(u => {
-                        if (u) {
-                            const newMap = { ...usersMapRef.current, [uid]: u };
-                            usersMapRef.current = newMap;
-                            setUsersMap(newMap);
-                        }
-                    });
+        const unsubscribe = ChatAPI.listenToMessages(bookId, (updatedMsg: ChatMessage) => {
+            setMessages(prev => {
+                const index = prev.findIndex(m => m.id === updatedMsg.id);
+                if (index !== -1) {
+                    const newMessages = [...prev];
+                    newMessages[index] = updatedMsg;
+                    return newMessages;
                 }
+                const newMessages = [...prev, updatedMsg];
+                updateParticipantCount(newMessages);
+                return newMessages;
             });
 
+            // Auto-scroll only if we are near the bottom
             setTimeout(() => {
                 flatListRef.current?.scrollToEnd({ animated: true });
             }, 100);
@@ -89,6 +93,55 @@ export default function BookChatScreen() {
         };
     }, [bookId]);
 
+    const loadInitialMessages = async () => {
+        const initialMessages = await ChatAPI.getMessages(bookId, 20, 0);
+        setMessages(initialMessages);
+        setOffset(20);
+        if (initialMessages.length < 20) setHasMore(false);
+        updateParticipants(initialMessages);
+        updateParticipantCount(initialMessages);
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 200);
+    };
+
+    const loadMoreMessages = async () => {
+        if (!hasMore || loadingMore) return;
+        setLoadingMore(true);
+        const olderMessages = await ChatAPI.getMessages(bookId, 20, offset);
+        if (olderMessages.length < 20) setHasMore(false);
+
+        setMessages(prev => {
+            const merged = [...olderMessages, ...prev];
+            // Simple unique filtering just in case
+            return Array.from(new Map(merged.map(m => [m.id, m])).values());
+        });
+
+        setOffset(prev => prev + 20);
+        setLoadingMore(false);
+        updateParticipants(olderMessages);
+    };
+
+    const updateParticipants = (msgs: ChatMessage[]) => {
+        const uids = new Set<string>();
+        msgs.forEach(m => uids.add(m.userId));
+        uids.forEach(uid => {
+            if (!usersMapRef.current[uid]) {
+                UsersAPI.getById(uid).then(u => {
+                    if (u) {
+                        const newMap = { ...usersMapRef.current, [uid]: u };
+                        usersMapRef.current = newMap;
+                        setUsersMap(newMap);
+                    }
+                });
+            }
+        });
+    };
+
+    const updateParticipantCount = (msgs: ChatMessage[]) => {
+        const uids = new Set<string>();
+        msgs.forEach(m => uids.add(m.userId));
+        setParticipantCount(uids.size);
+    };
+
     const loadData = async () => {
         try {
             const b = await BooksAPI.getById(bookId);
@@ -103,26 +156,46 @@ export default function BookChatScreen() {
     const handleSend = async (imageUrl?: string) => {
         if (!user) return;
 
-        // Review needs rating, others need text/image
         const isReview = msgType === 'review';
         if (!isReview && !inputText.trim() && !imageUrl) return;
 
+        // 1. Pre-generate ID and create temp message
+        const tempId = push(ref(db, `chats/${bookId}`)).key || Date.now().toString();
+        const newMessage: ChatMessage = {
+            id: tempId,
+            bookId,
+            userId: user.id!,
+            text: inputText.trim(),
+            type: msgType as any,
+            pageNumber: (msgType === 'quote' || msgType === 'critique') ? pageNumber : undefined,
+            rating: isReview ? rating : undefined,
+            imageUrl: imageUrl,
+            replyToId: replyTo?.id,
+            createdAt: new Date().toISOString(),
+            timestamp: Date.now(),
+            status: 'sending'
+        };
+
+        // 2. Instant UI update
+        setMessages(prev => [...prev, newMessage]);
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+
+        // 3. Reset input fields
+        setInputText('');
+        setPageNumber('');
+        setMsgType('normal');
+        setReplyTo(null);
+        setShowEmojis(false);
+
         try {
             await ChatAPI.sendMessage({
-                bookId,
-                userId: user.id!,
-                text: inputText.trim(),
-                type: msgType as any,
-                pageNumber: (msgType === 'quote' || msgType === 'critique') ? pageNumber : undefined,
-                rating: isReview ? rating : undefined,
-                imageUrl: imageUrl,
-                replyToId: replyTo?.id,
+                ...newMessage,
+                status: 'sent'
             });
-            setInputText('');
-            setPageNumber('');
-            setMsgType('normal');
-            setReplyTo(null);
+            // Status will be updated via real-time listener
         } catch (error) {
+            console.error('Failed to send message:', error);
+            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
             Alert.alert('خطأ', 'فشل إرسال الرسالة');
         }
     };
@@ -184,6 +257,7 @@ export default function BookChatScreen() {
                 message={item}
                 isSelf={isSelf}
                 user={msgUser}
+                currentUserId={user?.id}
                 activeColors={activeColors}
                 onReaction={(emoji) => handleReaction(item.id!, emoji)}
                 onOptions={() => handleMessageOptions(item)}
@@ -248,8 +322,10 @@ export default function BookChatScreen() {
                     renderItem={renderMessage}
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
-                    onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
                     keyboardShouldPersistTaps="handled"
+                    onStartReached={loadMoreMessages} // Using modern onStartReached for loading older messages
+                    onStartReachedThreshold={0.5}
+                    ListHeaderComponent={loadingMore ? <ActivityIndicator size="small" color={activeColors.primary} style={{ marginVertical: 10 }} /> : null}
                 />
             )}
 

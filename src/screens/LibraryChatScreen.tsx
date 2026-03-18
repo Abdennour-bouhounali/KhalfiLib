@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Text, TextInput, TouchableOpacity, FlatList, Image, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView, Keyboard } from 'react-native';
+import { ref, push } from 'firebase/database';
+import { db } from '../services/firebase';
 import { useNavigation } from '@react-navigation/native';
 import { ArrowLeft, Camera, Image as ImageIcon, Smile, Send, X, HelpCircle, Lightbulb, BookOpen, User as UserIcon, MessageCircle, Flag, ChevronRight } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -37,31 +39,30 @@ export default function LibraryChatScreen() {
     const [msgType, setMsgType] = useState<keyof typeof TYPE_CONFIG | 'normal'>('normal');
     const [selectedMessage, setSelectedMessage] = useState<LibraryChatMessage | null>(null);
     const [isOptionsVisible, setIsOptionsVisible] = useState(false);
+    const [offset, setOffset] = useState(0);
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
 
     const flatListRef = useRef<FlatList>(null);
     const usersMapRef = useRef<Record<string, User>>({});
     const QUICK_EMOJIS = ['😂', '❤️', '😍', '👍', '🙏', '🔥', '🥰', '😊', '🤔', '📚', '🎉', '💪'];
 
     useEffect(() => {
-        const unsubscribe = LibraryChatAPI.listenToMessages((msgs) => {
-            setMessages(msgs);
-            setLoading(false);
+        loadInitialMessages();
 
-            const uids = new Set<string>();
-            msgs.forEach(m => uids.add(m.userId));
-            setParticipantCount(uids.size);
-
-            uids.forEach(uid => {
-                if (!usersMapRef.current[uid]) {
-                    UsersAPI.getById(uid).then(u => {
-                        if (u) {
-                            const newMap = { ...usersMapRef.current, [uid]: u };
-                            usersMapRef.current = newMap;
-                            setUsersMap(newMap);
-                        }
-                    });
+        const unsubscribe = LibraryChatAPI.listenToMessages((updatedMsg: LibraryChatMessage) => {
+            setMessages(prev => {
+                const index = prev.findIndex(m => m.id === updatedMsg.id);
+                if (index !== -1) {
+                    const newMessages = [...prev];
+                    newMessages[index] = updatedMsg;
+                    return newMessages;
                 }
+                const newMessages = [...prev, updatedMsg];
+                updateParticipantCount(newMessages);
+                return newMessages;
             });
+            setLoading(false);
 
             setTimeout(() => {
                 flatListRef.current?.scrollToEnd({ animated: true });
@@ -78,22 +79,92 @@ export default function LibraryChatScreen() {
         };
     }, []);
 
+    const loadInitialMessages = async () => {
+        const initialMessages = await LibraryChatAPI.getMessages(20, 0);
+        setMessages(initialMessages);
+        setOffset(20);
+        if (initialMessages.length < 20) setHasMore(false);
+        updateParticipants(initialMessages);
+        updateParticipantCount(initialMessages);
+        setLoading(false);
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 200);
+    };
+
+    const loadMoreMessages = async () => {
+        if (!hasMore || loadingMore) return;
+        setLoadingMore(true);
+        const olderMessages = await LibraryChatAPI.getMessages(20, offset);
+        if (olderMessages.length < 20) setHasMore(false);
+
+        setMessages(prev => {
+            const merged = [...olderMessages, ...prev];
+            return Array.from(new Map(merged.map(m => [m.id, m])).values());
+        });
+
+        setOffset(prev => prev + 20);
+        setLoadingMore(false);
+        updateParticipants(olderMessages);
+    };
+
+    const updateParticipants = (msgs: LibraryChatMessage[]) => {
+        const uids = new Set<string>();
+        msgs.forEach(m => uids.add(m.userId));
+        uids.forEach(uid => {
+            if (!usersMapRef.current[uid]) {
+                UsersAPI.getById(uid).then(u => {
+                    if (u) {
+                        const newMap = { ...usersMapRef.current, [uid]: u };
+                        usersMapRef.current = newMap;
+                        setUsersMap(newMap);
+                    }
+                });
+            }
+        });
+    };
+
+    const updateParticipantCount = (msgs: LibraryChatMessage[]) => {
+        const uids = new Set<string>();
+        msgs.forEach(m => uids.add(m.userId));
+        setParticipantCount(uids.size);
+    };
+
     const handleSend = async (imageUrl?: string) => {
         if (!user) return;
         if (!inputText.trim() && !imageUrl) return;
 
+        // 1. Pre-generate ID and create temp message
+        const tempId = push(ref(db, `libraryMessages`)).key || Date.now().toString();
+        const newMessage: LibraryChatMessage = {
+            id: tempId,
+            userId: user.id!,
+            text: inputText.trim(),
+            type: msgType as any,
+            imageUrl: imageUrl,
+            replyToId: replyTo?.id,
+            createdAt: new Date().toISOString(),
+            timestamp: Date.now(),
+            status: 'sending'
+        };
+
+        // 2. Instant UI update
+        setMessages(prev => [...prev, newMessage]);
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+
+        // 3. Reset input fields
+        setInputText('');
+        setReplyTo(null);
+        setMsgType('normal');
+        setShowEmojis(false);
+
         try {
             await LibraryChatAPI.sendMessage({
-                userId: user.id!,
-                text: inputText.trim(),
-                type: msgType as any,
-                imageUrl: imageUrl,
-                replyToId: replyTo?.id,
+                ...newMessage,
+                status: 'sent'
             });
-            setInputText('');
-            setReplyTo(null);
-            setMsgType('normal');
+            // Status will be updated via real-time listener
         } catch (error) {
+            console.error('Failed to send global message:', error);
+            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
             Alert.alert('خطأ', 'فشل إرسال الرسالة');
         }
     };
@@ -178,6 +249,7 @@ export default function LibraryChatScreen() {
                 message={item}
                 isSelf={isSelf}
                 user={msgUser}
+                currentUserId={user?.id}
                 activeColors={activeColors}
                 onReaction={(emoji) => handleReaction(item.id!, emoji)}
                 onOptions={() => handleMessageOptions(item)}
@@ -220,8 +292,10 @@ export default function LibraryChatScreen() {
                     renderItem={renderMessage}
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
-                    onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
                     keyboardShouldPersistTaps="handled"
+                    onStartReached={loadMoreMessages}
+                    onStartReachedThreshold={0.5}
+                    ListHeaderComponent={loadingMore ? <ActivityIndicator size="small" color={activeColors.primary} style={{ marginVertical: 10 }} /> : null}
                 />
             )}
 

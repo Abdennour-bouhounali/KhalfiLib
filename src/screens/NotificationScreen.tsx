@@ -69,7 +69,7 @@ export default function NotificationScreen() {
             if (user?.id && uniqueData.length > 0) {
                 const unseenIds = uniqueData.filter(n => !seenIds.includes(n.id!)).map(n => n.id!);
                 if (unseenIds.length > 0) {
-                    await Promise.all(unseenIds.map(id => NotificationsAPI.markAsSeen(user.id, id)));
+                    NotificationsAPI.markMultipleAsSeen(user.id, unseenIds);
                 }
             }
         } catch (error) {

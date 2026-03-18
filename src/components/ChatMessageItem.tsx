@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
-import { MoreVertical, Quote as QuoteIcon, Star, AlertCircle, HelpCircle, MessageCircle, Lightbulb, BookOpen, User as UserIcon, MessageSquare } from 'lucide-react-native';
+import { MoreVertical, Quote as QuoteIcon, Star, AlertCircle, HelpCircle, MessageCircle, Lightbulb, BookOpen, User as UserIcon, MessageSquare, Clock, Check, CheckCheck } from 'lucide-react-native';
 import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { ChatMessage, LibraryChatMessage, User } from '../services/database';
@@ -9,6 +9,7 @@ interface ChatMessageItemProps {
     message: ChatMessage | LibraryChatMessage;
     isSelf: boolean;
     user?: User;
+    currentUserId?: string;
     activeColors: any;
     onReaction: (emoji: string) => void;
     onOptions: () => void;
@@ -32,6 +33,7 @@ export default function ChatMessageItem({
     message,
     isSelf,
     user,
+    currentUserId,
     activeColors,
     onReaction,
     onOptions,
@@ -47,8 +49,18 @@ export default function ChatMessageItem({
 
     const formatTime = (ts: number) => {
         const d = new Date(ts);
-        return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        return d.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
     };
+
+    const reactionCounts = useMemo(() => {
+        if (!message.reactions) return {};
+        return Object.values(message.reactions).reduce((acc: Record<string, number>, emoji) => {
+            acc[emoji] = (acc[emoji] || 0) + 1;
+            return acc;
+        }, {});
+    }, [message.reactions]);
+
+    const myReaction = message.reactions && currentUserId ? message.reactions[currentUserId] : null;
 
     const renderQuote = (msg: ChatMessage) => (
         <View style={[styles.quoteContainer, { backgroundColor: isDarkMode ? 'rgba(34, 197, 94, 0.1)' : 'rgba(34, 197, 94, 0.05)', borderColor: TYPE_COLORS.quote }]}>
@@ -85,7 +97,7 @@ export default function ChatMessageItem({
     const renderSpecialType = (msg: any, type: keyof typeof TYPE_COLORS) => {
         const color = TYPE_COLORS[type];
         return (
-            <View style={[styles.specialContainer, { backgroundColor: isDarkMode ? `${color}15` : `${color}08`, borderColor: color }]}>
+            <View style={[styles.specialContainer, { backgroundColor: isDarkMode ? `${color}15` : `${color}08`, borderColor: color || activeColors.border }]}>
                 <Text style={[styles.messageText, { color: textColor, fontFamily: type === 'critique' || type === 'question' ? FONTS.bold : FONTS.regular }]}>
                     {msg.text}
                 </Text>
@@ -113,7 +125,7 @@ export default function ChatMessageItem({
         const color = TYPE_COLORS[type as keyof typeof TYPE_COLORS] || activeColors.primary;
 
         return (
-            <View style={[styles.badge, { backgroundColor: color }]}>
+            <View style={[styles.badge, { backgroundColor: color || activeColors.primary }]}>
                 {item.icon}
                 <Text style={styles.badgeText}>{item.label}</Text>
             </View>
@@ -178,13 +190,30 @@ export default function ChatMessageItem({
                         <Text style={[styles.time, { color: activeColors.textTertiary }]}>
                             {formatTime(message.timestamp)}
                         </Text>
+                        {isSelf && (
+                            <View style={styles.statusIcon}>
+                                {message.status === 'sending' ? (
+                                    <Clock size={10} color={activeColors.textTertiary} />
+                                ) : (
+                                    <Check size={12} color={activeColors.primary} />
+                                )}
+                            </View>
+                        )}
                     </View>
                 </View>
 
-                {message.reactions && Object.keys(message.reactions).length > 0 && (
+                {Object.keys(reactionCounts).length > 0 && (
                     <View style={[styles.reactions, isSelf ? { alignSelf: 'flex-start' } : { alignSelf: 'flex-end' }]}>
-                        {Object.entries(message.reactions).map(([emoji, count]) => (
-                            <TouchableOpacity key={emoji} style={[styles.reactionPill, { backgroundColor: activeColors.surface, borderColor: activeColors.border }]} onPress={() => onReaction(emoji)}>
+                        {Object.entries(reactionCounts).map(([emoji, count]) => (
+                            <TouchableOpacity
+                                key={emoji}
+                                style={[
+                                    styles.reactionPill,
+                                    { backgroundColor: activeColors.surface, borderColor: activeColors.border },
+                                    myReaction === emoji && { borderColor: activeColors.primary, backgroundColor: isDarkMode ? '#1E3A2F' : '#E6F4EA' }
+                                ]}
+                                onPress={() => onReaction(emoji)}
+                            >
                                 <Text style={styles.reactionText}>{emoji} {count}</Text>
                             </TouchableOpacity>
                         ))}
@@ -269,8 +298,13 @@ const styles = StyleSheet.create({
     },
     metaRow: {
         flexDirection: 'row',
-        justifyContent: 'flex-start',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
         marginTop: 4,
+        gap: 4,
+    },
+    statusIcon: {
+        marginLeft: 2,
     },
     time: {
         fontSize: 10,

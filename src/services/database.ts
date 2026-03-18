@@ -1,4 +1,4 @@
-import { ref, get, push, update, remove, query, orderByChild, equalTo, set, onValue, off } from 'firebase/database';
+import { ref, get, push, update, remove, query, orderByChild, equalTo, set, onValue, off, limitToLast, onChildAdded, onChildChanged } from 'firebase/database';
 import { db } from './firebase';
 import { StorageService } from './StorageService';
 
@@ -91,8 +91,8 @@ export interface ChatMessage {
     pageNumber?: string;
     rating?: number;
     imageUrl?: string;
-    reactions?: Record<string, number>; // e.g. { "👍": 2, "❤️": 1 }
-    userReactionType?: Record<string, string>; // userId -> emoji
+    reactions?: Record<string, string>; // userId -> emoji
+    status?: 'sending' | 'sent' | 'failed';
     replyToId?: string;
     createdAt: string;
     timestamp: number;
@@ -105,8 +105,8 @@ export interface LibraryChatMessage {
     type: 'normal' | 'quote' | 'review' | 'thought' | 'question' | 'idea' | 'book_suggestion' | 'author_suggestion';
     tags?: string[];
     imageUrl?: string;
-    reactions?: Record<string, number>;
-    userReactionType?: Record<string, string>;
+    reactions?: Record<string, string>; // userId -> emoji
+    status?: 'sending' | 'sent' | 'failed';
     replyToId?: string;
     createdAt: string;
     timestamp: number;
@@ -152,21 +152,14 @@ export const BookLogic = {
 export const FieldsAPI = {
     getAll: async (): Promise<Field[]> => {
         try {
-            // 1. Get from cache first
+            // 1. Get from SQLite first (Instant load)
             const cached = await StorageService.getCollection<Field>('fields');
 
-            // 2. Fetch from Firebase in background to update cache
-            const fieldsRef = ref(db, 'fields');
-            get(fieldsRef).then(snapshot => {
-                if (snapshot.exists()) {
-                    StorageService.saveCollection('fields', objectToArray<Field>(snapshot.val()));
-                }
-            });
-
+            // 2. Fetch from Firebase in background handled by CacheSyncService
             return cached;
         } catch (error) {
             console.error(`[FieldsAPI] getAll failed:`, error);
-            throw error;
+            return []; // Return empty instead of throwing to avoid UI crash
         }
     },
 
@@ -208,21 +201,12 @@ export const FieldsAPI = {
 export const BooksAPI = {
     getAll: async (): Promise<Book[]> => {
         try {
-            // 1. Get from cache first
+            // 1. Get from SQLite first (Instant load)
             const cached = await StorageService.getCollection<Book>('books');
-
-            // 2. Fetch from Firebase in background
-            const booksRef = ref(db, 'books');
-            get(booksRef).then(snapshot => {
-                if (snapshot.exists()) {
-                    StorageService.saveCollection('books', objectToArray<Book>(snapshot.val()));
-                }
-            });
-
             return cached;
         } catch (error) {
             console.error(`[BooksAPI] getAll failed:`, error);
-            throw error;
+            return [];
         }
     },
 
@@ -377,22 +361,13 @@ export const UsersAPI = {
 
     getAll: async (role?: UserRole): Promise<User[]> => {
         try {
-            // 1. Get from cache first
+            // 1. Get from SQLite first (Instant load)
             const cached = await StorageService.getCollection<User>('users');
             const filteredCache = role ? cached.filter(u => u.role === role) : cached;
-
-            // 2. Fetch from Firebase in background
-            const usersRef = ref(db, 'users');
-            get(usersRef).then(snapshot => {
-                if (snapshot.exists()) {
-                    StorageService.saveCollection('users', objectToArray<User>(snapshot.val()));
-                }
-            });
-
             return filteredCache;
         } catch (error) {
             console.error(`[UsersAPI] getAll failed:`, error);
-            throw error;
+            return [];
         }
     },
 
@@ -521,27 +496,19 @@ export const BorrowingAPI = {
 
     getByUserId: async (userId: string): Promise<BorrowRecord[]> => {
         try {
-            const recordsRef = ref(db, 'borrowRecords');
-            const userQuery = query(recordsRef, orderByChild('userId'), equalTo(userId));
-            const snapshot = await get(userQuery);
-            if (snapshot.exists()) {
-                return objectToArray<BorrowRecord>(snapshot.val());
-            }
-            return [];
+            // 1. Get from SQLite first
+            const cached = await StorageService.getCollection<BorrowRecord>('borrowRecords');
+            return cached.filter(r => r.userId === userId);
         } catch (error) {
             console.error('[BorrowingAPI] getByUserId failed:', error);
-            throw error;
+            return [];
         }
     },
 
     getActiveCount: async (): Promise<number> => {
         try {
-            const usersRef = ref(db, 'users');
-            const snapshot = await get(usersRef);
-            if (!snapshot.exists()) return 0;
-
-            const users = snapshot.val();
-            return Object.values(users).filter((u: any) => !!u.borrowedBookId).length;
+            const users = await StorageService.getCollection<User>('users');
+            return users.filter(u => !!u.borrowedBookId).length;
         } catch (error) {
             console.error('[BorrowingAPI] getActiveCount failed:', error);
             return 0;
@@ -550,15 +517,9 @@ export const BorrowingAPI = {
 
     getOverdueCount: async (): Promise<number> => {
         try {
-            const recordsRef = ref(db, 'borrowRecords');
-            const snapshot = await get(recordsRef);
-            if (!snapshot.exists()) return 0;
-
-            const records = snapshot.val();
+            const records = await StorageService.getCollection<BorrowRecord>('borrowRecords');
             const now = new Date();
-            return Object.values(records).filter((r: any) =>
-                !r.returnDate && new Date(r.dueDate) < now
-            ).length;
+            return records.filter(r => !r.returnDate && new Date(r.dueDate) < now).length;
         } catch (error) {
             console.error('[BorrowingAPI] getOverdueCount failed:', error);
             return 0;
@@ -572,19 +533,16 @@ export const BorrowingAPI = {
 export const SubscriptionsAPI = {
     getByUserId: async (userId: string): Promise<Subscription | null> => {
         try {
-            const subsRef = ref(db, 'subscriptions');
-            const subQuery = query(subsRef, orderByChild('userId'), equalTo(userId));
-            const snapshot = await get(subQuery);
-            if (snapshot.exists()) {
-                const data = snapshot.val();
-                const subs = objectToArray<Subscription>(data);
-                subs.sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
-                return subs[0];
+            const cached = await StorageService.getCollection<Subscription>('subscriptions');
+            const userSubs = cached.filter(s => s.userId === userId);
+            if (userSubs.length > 0) {
+                userSubs.sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+                return userSubs[0];
             }
             return null;
         } catch (error) {
             console.error(`[SubscriptionsAPI] getByUserId failed:`, error);
-            throw error;
+            return null;
         }
     },
 
@@ -629,26 +587,26 @@ export const SubscriptionsAPI = {
 // CHAT API
 // ==========================================
 export const ChatAPI = {
-    sendMessage: async (message: Omit<ChatMessage, 'id' | 'createdAt' | 'timestamp'>) => {
+    sendMessage: async (message: ChatMessage | Omit<ChatMessage, 'id' | 'createdAt' | 'timestamp'>) => {
         try {
+            const { bookId } = message as ChatMessage;
+            const tempId = (message as ChatMessage).id;
+            const msgRef = tempId ? ref(db, `chats/${bookId}/${tempId}`) : push(ref(db, `chats/${bookId}`));
+
             const msg: ChatMessage = {
-                ...message,
-                type: message.type || 'normal',
                 createdAt: new Date().toISOString(),
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                ...message,
+                id: tempId || msgRef.key!,
             } as ChatMessage;
 
-            // Remove undefined values to avoid Firebase errors
-            Object.keys(msg).forEach(key => {
-                const k = key as keyof ChatMessage;
-                if (msg[k] === undefined) {
-                    delete msg[k];
-                }
-            });
+            if (!msg.type) (msg as any).type = 'normal';
 
-            const chatRef = ref(db, `chats/${message.bookId}`);
-            const newRef = await push(chatRef, msg);
-            return newRef.key as string;
+            // Remove undefined values
+            Object.keys(msg).forEach(key => (msg as any)[key] === undefined && delete (msg as any)[key]);
+
+            await set(msgRef, msg);
+            return msg;
         } catch (error) {
             console.error('[ChatAPI] sendMessage failed:', error);
             throw error;
@@ -665,62 +623,45 @@ export const ChatAPI = {
         }
     },
 
-    toggleReaction: async (bookId: string, messageId: string, emoji: string, userId: string) => {
+    getMessages: async (bookId: string, limit: number = 20, offset: number = 0): Promise<ChatMessage[]> => {
         try {
-            const msgRef = ref(db, `chats/${bookId}/${messageId}`);
-            const snapshot = await get(msgRef);
-            if (!snapshot.exists()) return;
+            return await StorageService.getMessages(bookId, limit, offset, false);
+        } catch (error) {
+            console.error('[ChatAPI] getMessages failed:', error);
+            return [];
+        }
+    },
 
-            const msg = snapshot.val() as ChatMessage;
-            const currentReactions = msg.reactions || {};
-            const userReactionType = msg.userReactionType || {};
+    listenToMessages: (bookId: string, onUpdate: (msg: ChatMessage) => void) => {
+        const path = `chats/${bookId}`;
+        const chatRef = query(ref(db, path), limitToLast(50));
 
-            // If user already reacted with this emoji, remove it
-            if (userReactionType[userId] === emoji) {
-                currentReactions[emoji] = Math.max(0, (currentReactions[emoji] || 1) - 1);
-                delete userReactionType[userId];
-            } else {
-                // Remove previous reaction if any
-                if (userReactionType[userId]) {
-                    const oldEmoji = userReactionType[userId];
-                    currentReactions[oldEmoji] = Math.max(0, (currentReactions[oldEmoji] || 1) - 1);
-                }
-                // Add new reaction
-                currentReactions[emoji] = (currentReactions[emoji] || 0) + 1;
-                userReactionType[userId] = emoji;
+        const handleSnapshot = (snapshot: any) => {
+            if (snapshot.exists()) {
+                const message = { id: snapshot.key, ...snapshot.val() } as ChatMessage;
+                StorageService.saveMessage(bookId, message, false).then(() => {
+                    onUpdate(message);
+                });
             }
+        };
 
-            // Clean up 0 reactions
-            Object.keys(currentReactions).forEach(key => {
-                if (currentReactions[key] === 0) delete currentReactions[key];
-            });
+        const addedSub = onChildAdded(chatRef, handleSnapshot);
+        const changedSub = onChildChanged(chatRef, handleSnapshot);
 
-            await update(msgRef, {
-                reactions: currentReactions,
-                userReactionType: userReactionType
-            });
+        return () => {
+            off(chatRef, 'child_added', addedSub);
+            off(chatRef, 'child_changed', changedSub);
+        };
+    },
+
+    toggleReaction: async (bookId: string, messageId: string, userId: string, emoji: string | null) => {
+        try {
+            const reactionRef = ref(db, `chats/${bookId}/${messageId}/reactions/${userId}`);
+            await set(reactionRef, emoji);
         } catch (error) {
             console.error('[ChatAPI] toggleReaction failed:', error);
             throw error;
         }
-    },
-
-    listenToMessages: (bookId: string, callback: (messages: ChatMessage[]) => void) => {
-        const chatRef = ref(db, `chats/${bookId}`);
-        const q = query(chatRef, orderByChild('timestamp'));
-
-        const unsubscribe = onValue(q, (snapshot) => {
-            if (snapshot.exists()) {
-                const data = snapshot.val();
-                callback(objectToArray<ChatMessage>(data).sort((a, b) => a.timestamp - b.timestamp));
-            } else {
-                callback([]);
-            }
-        }, (error) => {
-            console.error('[ChatAPI] listenToMessages error:', error);
-        });
-
-        return () => off(chatRef, 'value', unsubscribe);
     }
 };
 
@@ -728,26 +669,25 @@ export const ChatAPI = {
 // LIBRARY CHAT API
 // ==========================================
 export const LibraryChatAPI = {
-    sendMessage: async (message: Omit<LibraryChatMessage, 'id' | 'createdAt' | 'timestamp'>) => {
+    sendMessage: async (message: LibraryChatMessage | Omit<LibraryChatMessage, 'id' | 'createdAt' | 'timestamp'>) => {
         try {
+            const tempId = (message as LibraryChatMessage).id;
+            const msgRef = tempId ? ref(db, `libraryMessages/${tempId}`) : push(ref(db, `libraryMessages`));
+
             const msg: LibraryChatMessage = {
-                ...message,
-                type: message.type || 'normal',
                 createdAt: new Date().toISOString(),
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                ...message,
+                id: tempId || msgRef.key!,
             } as LibraryChatMessage;
 
-            // Remove undefined values to avoid Firebase errors
-            Object.keys(msg).forEach(key => {
-                const k = key as keyof LibraryChatMessage;
-                if (msg[k] === undefined) {
-                    delete msg[k];
-                }
-            });
+            if (!msg.type) (msg as any).type = 'normal';
 
-            const chatRef = ref(db, `libraryMessages`);
-            const newRef = await push(chatRef, msg);
-            return newRef.key as string;
+            // Remove undefined values
+            Object.keys(msg).forEach(key => (msg as any)[key] === undefined && delete (msg as any)[key]);
+
+            await set(msgRef, msg);
+            return msg;
         } catch (error) {
             console.error('[LibraryChatAPI] sendMessage failed:', error);
             throw error;
@@ -764,62 +704,45 @@ export const LibraryChatAPI = {
         }
     },
 
-    toggleReaction: async (messageId: string, emoji: string, userId: string) => {
+    getMessages: async (limit: number = 20, offset: number = 0): Promise<LibraryChatMessage[]> => {
         try {
-            const msgRef = ref(db, `libraryMessages/${messageId}`);
-            const snapshot = await get(msgRef);
-            if (!snapshot.exists()) return;
+            return await StorageService.getMessages('global', limit, offset, true);
+        } catch (error) {
+            console.error('[LibraryChatAPI] getMessages failed:', error);
+            return [];
+        }
+    },
 
-            const msg = snapshot.val() as LibraryChatMessage;
-            const currentReactions = msg.reactions || {};
-            const userReactionType = msg.userReactionType || {};
+    listenToMessages: (onUpdate: (msg: LibraryChatMessage) => void) => {
+        const path = `libraryMessages`;
+        const chatRef = query(ref(db, path), limitToLast(50));
 
-            // If user already reacted with this emoji, remove it
-            if (userReactionType[userId] === emoji) {
-                currentReactions[emoji] = Math.max(0, (currentReactions[emoji] || 1) - 1);
-                delete userReactionType[userId];
-            } else {
-                // Remove previous reaction if any
-                if (userReactionType[userId]) {
-                    const oldEmoji = userReactionType[userId];
-                    currentReactions[oldEmoji] = Math.max(0, (currentReactions[oldEmoji] || 1) - 1);
-                }
-                // Add new reaction
-                currentReactions[emoji] = (currentReactions[emoji] || 0) + 1;
-                userReactionType[userId] = emoji;
+        const handleSnapshot = (snapshot: any) => {
+            if (snapshot.exists()) {
+                const message = { id: snapshot.key, ...snapshot.val() } as LibraryChatMessage;
+                StorageService.saveMessage('global', message, true).then(() => {
+                    onUpdate(message);
+                });
             }
+        };
 
-            // Clean up 0 reactions
-            Object.keys(currentReactions).forEach(key => {
-                if (currentReactions[key] === 0) delete currentReactions[key];
-            });
+        const addedSub = onChildAdded(chatRef, handleSnapshot);
+        const changedSub = onChildChanged(chatRef, handleSnapshot);
 
-            await update(msgRef, {
-                reactions: currentReactions,
-                userReactionType: userReactionType
-            });
+        return () => {
+            off(chatRef, 'child_added', addedSub);
+            off(chatRef, 'child_changed', changedSub);
+        };
+    },
+
+    toggleReaction: async (messageId: string, userId: string, emoji: string | null) => {
+        try {
+            const reactionRef = ref(db, `libraryMessages/${messageId}/reactions/${userId}`);
+            await set(reactionRef, emoji);
         } catch (error) {
             console.error('[LibraryChatAPI] toggleReaction failed:', error);
             throw error;
         }
-    },
-
-    listenToMessages: (callback: (messages: LibraryChatMessage[]) => void) => {
-        const chatRef = ref(db, `libraryMessages`);
-        const q = query(chatRef, orderByChild('timestamp'));
-
-        const unsubscribe = onValue(q, (snapshot) => {
-            if (snapshot.exists()) {
-                const data = snapshot.val();
-                callback(objectToArray<LibraryChatMessage>(data).sort((a, b) => a.timestamp - b.timestamp));
-            } else {
-                callback([]);
-            }
-        }, (error) => {
-            console.error('[LibraryChatAPI] listenToMessages error:', error);
-        });
-
-        return () => off(chatRef, 'value', unsubscribe);
     }
 };
 
@@ -829,24 +752,16 @@ export const LibraryChatAPI = {
 export const NotificationsAPI = {
     getAll: async (): Promise<AppNotification[]> => {
         try {
-            // 1. Get from cache first
+            // 1. Get from SQLite first (Instant load)
             const cached = await StorageService.getCollection<AppNotification>('notifications');
             const sortedCache = cached.sort((a, b) =>
                 new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
             );
 
-            // 2. Fetch from Firebase in background
-            const notifsRef = ref(db, 'notifications');
-            get(notifsRef).then(snapshot => {
-                if (snapshot.exists()) {
-                    StorageService.saveCollection('notifications', objectToArray<AppNotification>(snapshot.val()));
-                }
-            });
-
             return sortedCache;
         } catch (error) {
             console.error('[NotificationsAPI] getAll failed:', error);
-            throw error;
+            return [];
         }
     },
 
@@ -882,6 +797,23 @@ export const NotificationsAPI = {
         }
     },
 
+    markMultipleAsSeen: async (userId: string, notifIds: string[]): Promise<void> => {
+        try {
+            const updates: Record<string, any> = {};
+            const now = new Date().toISOString();
+            notifIds.forEach(id => {
+                updates[`userNotifications/${userId}/seen/${id}`] = {
+                    seen: true,
+                    seenAt: now
+                };
+            });
+            await update(ref(db), updates);
+        } catch (error) {
+            console.error('[NotificationsAPI] markMultipleAsSeen failed:', error);
+            throw error;
+        }
+    },
+
     isSeen: async (userId: string, notifId: string): Promise<boolean> => {
         try {
             const seenRef = ref(db, `userNotifications/${userId}/seen/${notifId}`);
@@ -905,9 +837,8 @@ export const NotificationsAPI = {
 
     getDeletedIds: async (userId: string): Promise<string[]> => {
         try {
-            const deletedRef = ref(db, `userNotifications/${userId}/deleted`);
-            const snapshot = await get(deletedRef);
-            return snapshot.exists() ? Object.keys(snapshot.val()) : [];
+            const cached = await StorageService.getCollection<string>(`user_${userId}_deleted`);
+            return cached || [];
         } catch (error) {
             console.error('[NotificationsAPI] getDeletedIds failed:', error);
             return [];
@@ -926,9 +857,8 @@ export const NotificationsAPI = {
 
     getSeenIds: async (userId: string): Promise<string[]> => {
         try {
-            const seenRef = ref(db, `userNotifications/${userId}/seen`);
-            const snapshot = await get(seenRef);
-            return snapshot.exists() ? Object.keys(snapshot.val()) : [];
+            const cached = await StorageService.getCollection<string>(`user_${userId}_seen`);
+            return cached || [];
         } catch (error) {
             console.error('[NotificationsAPI] getSeenIds failed:', error);
             return [];

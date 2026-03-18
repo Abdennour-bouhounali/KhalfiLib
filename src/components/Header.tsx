@@ -25,7 +25,7 @@ interface HeaderProps {
 }
 
 export default function Header({
-    showSearch = true,
+    showSearch = false,
     showNotification = true,
     title = 'مكتبة عشيرة آل خلفي',
     onSearchPress,
@@ -90,11 +90,7 @@ export default function Header({
                             >
                                 <LogOut color={isDarkMode ? '#FF5252' : COLORS.danger} size={20} />
                             </TouchableOpacity>
-                        ) : !showLogo && (
-                            <TouchableOpacity style={styles.iconButton} onPress={onSearchPress}>
-                                <Search color={activeColors.text} size={24} />
-                            </TouchableOpacity>
-                        )}
+                        ) : null}
                     </View>
 
                     {/* Branding Group (Center/Title) */}
