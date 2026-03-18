@@ -94,28 +94,42 @@ export default function BookChatScreen() {
     }, [bookId]);
 
     const loadInitialMessages = async () => {
+        setLoading(true);
         const initialMessages = await ChatAPI.getMessages(bookId, 20, 0);
         setMessages(initialMessages);
-        setOffset(20);
         if (initialMessages.length < 20) setHasMore(false);
         updateParticipants(initialMessages);
         updateParticipantCount(initialMessages);
+        setLoading(false);
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 200);
     };
 
     const loadMoreMessages = async () => {
-        if (!hasMore || loadingMore) return;
+        if (!hasMore || loadingMore || messages.length === 0) return;
         setLoadingMore(true);
-        const olderMessages = await ChatAPI.getMessages(bookId, 20, offset);
-        if (olderMessages.length < 20) setHasMore(false);
+
+        const oldestTimestamp = messages[0].timestamp;
+
+        // 1. Try to load from SQLite first
+        let olderMessages = await ChatAPI.getMessages(bookId, 15, oldestTimestamp);
+
+        // 2. If SQLite is empty, try Firebase
+        if (olderMessages.length === 0) {
+            olderMessages = await ChatAPI.fetchOlderMessages(bookId, 15, oldestTimestamp);
+        }
+
+        if (olderMessages.length === 0) {
+            setHasMore(false);
+            setLoadingMore(false);
+            return;
+        }
 
         setMessages(prev => {
             const merged = [...olderMessages, ...prev];
-            // Simple unique filtering just in case
+            // Filter duplicates by ID
             return Array.from(new Map(merged.map(m => [m.id, m])).values());
         });
 
-        setOffset(prev => prev + 20);
         setLoadingMore(false);
         updateParticipants(olderMessages);
     };
@@ -190,9 +204,8 @@ export default function BookChatScreen() {
         try {
             await ChatAPI.sendMessage({
                 ...newMessage,
-                status: 'sent'
+                status: 'sent' // Sending as 'sent' so listener updates local 'sending' to 'sent'
             });
-            // Status will be updated via real-time listener
         } catch (error) {
             console.error('Failed to send message:', error);
             setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
@@ -230,7 +243,13 @@ export default function BookChatScreen() {
     };
 
     const handleReaction = (msgId: string, emoji: string) => {
-        if (user) ChatAPI.toggleReaction(bookId, msgId, emoji, user.id!);
+        if (!user) return;
+        const targetMsg = messages.find(m => m.id === msgId);
+        const currentReaction = targetMsg?.reactions?.[user.id!];
+
+        // If same emoji, remove (toggle off)
+        const finalEmoji = currentReaction === emoji ? null : emoji;
+        ChatAPI.toggleReaction(bookId, msgId, finalEmoji, user.id!);
     };
 
     const handleMessageOptions = (item: ChatMessage) => {
@@ -323,8 +342,9 @@ export default function BookChatScreen() {
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
-                    onStartReached={loadMoreMessages} // Using modern onStartReached for loading older messages
+                    onStartReached={loadMoreMessages}
                     onStartReachedThreshold={0.5}
+                    maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
                     ListHeaderComponent={loadingMore ? <ActivityIndicator size="small" color={activeColors.primary} style={{ marginVertical: 10 }} /> : null}
                 />
             )}

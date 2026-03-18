@@ -70,14 +70,21 @@ export const SQLiteService = {
         );
     },
 
-    getMessages: async (bookId: string, limit: number = 20, offset: number = 0, isGlobal: boolean = false) => {
+    getMessages: async (bookId: string, limit: number = 20, beforeTimestamp: number | null = null, isGlobal: boolean = false) => {
         const db = await SQLiteService.init();
-        const results = await db.getAllAsync(
-            'SELECT data FROM messages WHERE bookId = ? AND isGlobal = ? ORDER BY createdAt DESC LIMIT ? OFFSET ?',
-            [bookId, isGlobal ? 1 : 0, limit, offset]
-        ) as { data: string }[];
+        const query = beforeTimestamp
+            ? 'SELECT data FROM messages WHERE bookId = ? AND isGlobal = ? AND createdAt < ? ORDER BY createdAt DESC LIMIT ?'
+            : 'SELECT data FROM messages WHERE bookId = ? AND isGlobal = ? ORDER BY createdAt DESC LIMIT ?';
+        const params = beforeTimestamp
+            ? [bookId, isGlobal ? 1 : 0, beforeTimestamp, limit]
+            : [bookId, isGlobal ? 1 : 0, limit];
 
-        return results.map((r: { data: string }) => JSON.parse(r.data)).reverse(); // Reverse because we want latest last in the UI
+        const results = await db.getAllAsync(query, params) as { data: string }[];
+
+        const messages = results.map((r: { data: string }) => JSON.parse(r.data));
+        // Result is already DESC (newest first). UI needs them in correct order for FlatList.
+        // If sorting in FlatList, we keep them as is. But current UI expects oldest first if not using inverted.
+        return messages.reverse();
     },
 
     clearAll: async () => {

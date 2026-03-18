@@ -80,30 +80,41 @@ export default function LibraryChatScreen() {
     }, []);
 
     const loadInitialMessages = async () => {
-        const initialMessages = await LibraryChatAPI.getMessages(20, 0);
+        setLoading(true);
+        const initialMessages = await LibraryChatAPI.getMessages(20);
         setMessages(initialMessages);
-        setOffset(20);
         if (initialMessages.length < 20) setHasMore(false);
-        updateParticipants(initialMessages);
-        updateParticipantCount(initialMessages);
         setLoading(false);
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 200);
     };
 
     const loadMoreMessages = async () => {
-        if (!hasMore || loadingMore) return;
+        if (!hasMore || loadingMore || messages.length === 0) return;
         setLoadingMore(true);
-        const olderMessages = await LibraryChatAPI.getMessages(20, offset);
-        if (olderMessages.length < 20) setHasMore(false);
+
+        const oldestTimestamp = messages[0].timestamp;
+
+        // 1. Try to load from SQLite first
+        let olderMessages = await LibraryChatAPI.getMessages(15, oldestTimestamp);
+
+        // 2. If SQLite is empty, try Firebase
+        if (olderMessages.length === 0) {
+            olderMessages = await LibraryChatAPI.fetchOlderMessages(15, oldestTimestamp);
+        }
+
+        if (olderMessages.length === 0) {
+            setHasMore(false);
+            setLoadingMore(false);
+            return;
+        }
 
         setMessages(prev => {
             const merged = [...olderMessages, ...prev];
+            // Filter duplicates by ID
             return Array.from(new Map(merged.map(m => [m.id, m])).values());
         });
 
-        setOffset(prev => prev + 20);
         setLoadingMore(false);
-        updateParticipants(olderMessages);
     };
 
     const updateParticipants = (msgs: LibraryChatMessage[]) => {
@@ -217,7 +228,12 @@ export default function LibraryChatScreen() {
 
     const handleReaction = (msgId: string, emoji: string) => {
         if (!user) return;
-        LibraryChatAPI.toggleReaction(msgId, emoji, user.id!);
+        const targetMsg = messages.find(m => m.id === msgId);
+        const currentReaction = targetMsg?.reactions?.[user.id!];
+
+        // If same emoji, remove (toggle off)
+        const finalEmoji = currentReaction === emoji ? null : emoji;
+        LibraryChatAPI.toggleReaction(msgId, finalEmoji, user.id!);
     };
 
     const handleMessageOptions = (item: LibraryChatMessage) => {
@@ -295,6 +311,7 @@ export default function LibraryChatScreen() {
                     keyboardShouldPersistTaps="handled"
                     onStartReached={loadMoreMessages}
                     onStartReachedThreshold={0.5}
+                    maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
                     ListHeaderComponent={loadingMore ? <ActivityIndicator size="small" color={activeColors.primary} style={{ marginVertical: 10 }} /> : null}
                 />
             )}

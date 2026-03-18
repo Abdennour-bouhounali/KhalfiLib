@@ -1,6 +1,7 @@
-import { ref, get, push, update, remove, query, orderByChild, equalTo, set, onValue, off, limitToLast, onChildAdded, onChildChanged } from 'firebase/database';
+import { ref, get, push, update, remove, query, orderByChild, equalTo, set, onValue, off, limitToLast, onChildAdded, onChildChanged, endBefore } from 'firebase/database';
 import { db } from './firebase';
 import { StorageService } from './StorageService';
+import { SQLiteService } from './SQLiteService';
 
 // ==========================================
 // MODELS (TypeScript Interfaces)
@@ -623,11 +624,39 @@ export const ChatAPI = {
         }
     },
 
-    getMessages: async (bookId: string, limit: number = 20, offset: number = 0): Promise<ChatMessage[]> => {
+    getMessages: async (bookId: string, limit: number = 20, beforeTimestamp?: number): Promise<ChatMessage[]> => {
         try {
-            return await StorageService.getMessages(bookId, limit, offset, false);
+            return await StorageService.getMessages(bookId, limit, beforeTimestamp ?? null, false);
         } catch (error) {
             console.error('[ChatAPI] getMessages failed:', error);
+            return [];
+        }
+    },
+
+    fetchOlderMessages: async (bookId: string, limit: number = 20, beforeTimestamp: number): Promise<ChatMessage[]> => {
+        try {
+            const chatRef = query(
+                ref(db, `chats/${bookId}`),
+                orderByChild('timestamp'),
+                endBefore(beforeTimestamp),
+                limitToLast(limit)
+            );
+            const snapshot = await get(chatRef);
+            if (!snapshot.exists()) return [];
+
+            const messages: ChatMessage[] = [];
+            snapshot.forEach(child => {
+                messages.push({ id: child.key, ...child.val() });
+            });
+
+            // Save to local cache
+            for (const msg of messages) {
+                await StorageService.saveMessage(bookId, msg, false);
+            }
+
+            return messages;
+        } catch (error) {
+            console.error('[ChatAPI] fetchOlderMessages failed:', error);
             return [];
         }
     },
@@ -639,9 +668,9 @@ export const ChatAPI = {
         const handleSnapshot = (snapshot: any) => {
             if (snapshot.exists()) {
                 const message = { id: snapshot.key, ...snapshot.val() } as ChatMessage;
-                StorageService.saveMessage(bookId, message, false).then(() => {
-                    onUpdate(message);
-                });
+                // Instant update for UI, then persist
+                onUpdate(message);
+                StorageService.saveMessage(bookId, message, false);
             }
         };
 
@@ -654,9 +683,10 @@ export const ChatAPI = {
         };
     },
 
-    toggleReaction: async (bookId: string, messageId: string, userId: string, emoji: string | null) => {
+    toggleReaction: async (bookId: string, messageId: string, emoji: string | null, userId: string) => {
         try {
             const reactionRef = ref(db, `chats/${bookId}/${messageId}/reactions/${userId}`);
+            // If user taps the same emoji, it should be removed (handled at screen level by passing null)
             await set(reactionRef, emoji);
         } catch (error) {
             console.error('[ChatAPI] toggleReaction failed:', error);
@@ -704,11 +734,39 @@ export const LibraryChatAPI = {
         }
     },
 
-    getMessages: async (limit: number = 20, offset: number = 0): Promise<LibraryChatMessage[]> => {
+    getMessages: async (limit: number = 20, beforeTimestamp?: number): Promise<LibraryChatMessage[]> => {
         try {
-            return await StorageService.getMessages('global', limit, offset, true);
+            return await StorageService.getMessages('global', limit, beforeTimestamp ?? null, true);
         } catch (error) {
             console.error('[LibraryChatAPI] getMessages failed:', error);
+            return [];
+        }
+    },
+
+    fetchOlderMessages: async (limit: number = 20, beforeTimestamp: number): Promise<LibraryChatMessage[]> => {
+        try {
+            const chatRef = query(
+                ref(db, `libraryMessages`),
+                orderByChild('timestamp'),
+                endBefore(beforeTimestamp),
+                limitToLast(limit)
+            );
+            const snapshot = await get(chatRef);
+            if (!snapshot.exists()) return [];
+
+            const messages: LibraryChatMessage[] = [];
+            snapshot.forEach(child => {
+                messages.push({ id: child.key, ...child.val() });
+            });
+
+            // Save to local cache
+            for (const msg of messages) {
+                await StorageService.saveMessage('global', msg, true);
+            }
+
+            return messages;
+        } catch (error) {
+            console.error('[LibraryChatAPI] fetchOlderMessages failed:', error);
             return [];
         }
     },
@@ -720,9 +778,9 @@ export const LibraryChatAPI = {
         const handleSnapshot = (snapshot: any) => {
             if (snapshot.exists()) {
                 const message = { id: snapshot.key, ...snapshot.val() } as LibraryChatMessage;
-                StorageService.saveMessage('global', message, true).then(() => {
-                    onUpdate(message);
-                });
+                // Instant update for UI, then persist
+                onUpdate(message);
+                StorageService.saveMessage('global', message, true);
             }
         };
 
@@ -735,7 +793,7 @@ export const LibraryChatAPI = {
         };
     },
 
-    toggleReaction: async (messageId: string, userId: string, emoji: string | null) => {
+    toggleReaction: async (messageId: string, emoji: string | null, userId: string) => {
         try {
             const reactionRef = ref(db, `libraryMessages/${messageId}/reactions/${userId}`);
             await set(reactionRef, emoji);

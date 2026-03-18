@@ -51,8 +51,8 @@ export const StorageService = {
         await SQLiteService.saveMessage(message, bookId, isGlobal);
     },
 
-    getMessages: async (bookId: string, limit: number = 20, offset: number = 0, isGlobal: boolean = false) => {
-        return await SQLiteService.getMessages(bookId, limit, offset, isGlobal);
+    getMessages: async (bookId: string, limit: number = 20, beforeTimestamp: number | null = null, isGlobal: boolean = false) => {
+        return await SQLiteService.getMessages(bookId, limit, beforeTimestamp, isGlobal);
     },
 
     clearCache: async (): Promise<void> => {

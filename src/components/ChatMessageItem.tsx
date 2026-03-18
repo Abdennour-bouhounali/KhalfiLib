@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, Pressable } from 'react-native';
 import { MoreVertical, Quote as QuoteIcon, Star, AlertCircle, HelpCircle, MessageCircle, Lightbulb, BookOpen, User as UserIcon, MessageSquare, Clock, Check, CheckCheck } from 'lucide-react-native';
 import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
@@ -12,6 +12,7 @@ interface ChatMessageItemProps {
     currentUserId?: string;
     activeColors: any;
     onReaction: (emoji: string) => void;
+    onLongPress?: () => void;
     onOptions: () => void;
     replyToMessage?: ChatMessage | LibraryChatMessage;
     replyToUser?: User;
@@ -36,6 +37,7 @@ export default function ChatMessageItem({
     currentUserId,
     activeColors,
     onReaction,
+    onLongPress,
     onOptions,
     replyToMessage,
     replyToUser
@@ -61,6 +63,37 @@ export default function ChatMessageItem({
     }, [message.reactions]);
 
     const myReaction = message.reactions && currentUserId ? message.reactions[currentUserId] : null;
+
+    const [showFloatingReactions, setShowFloatingReactions] = useState(false);
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const scaleAnim = useRef(new Animated.Value(0.8)).current;
+
+    const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '👏'];
+
+    const toggleFloatingReactions = useCallback(() => {
+        if (!showFloatingReactions) {
+            setShowFloatingReactions(true);
+            Animated.parallel([
+                Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+                Animated.spring(scaleAnim, { toValue: 1, friction: 5, useNativeDriver: true })
+            ]).start();
+        } else {
+            Animated.parallel([
+                Animated.timing(fadeAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
+                Animated.timing(scaleAnim, { toValue: 0.8, duration: 150, useNativeDriver: true })
+            ]).start(() => setShowFloatingReactions(false));
+        }
+    }, [showFloatingReactions, fadeAnim, scaleAnim]);
+
+    const handleLongPress = () => {
+        toggleFloatingReactions();
+        onLongPress?.();
+    };
+
+    const selectReaction = (emoji: string) => {
+        toggleFloatingReactions();
+        onReaction(emoji);
+    };
 
     const renderQuote = (msg: ChatMessage) => (
         <View style={[styles.quoteContainer, { backgroundColor: isDarkMode ? 'rgba(34, 197, 94, 0.1)' : 'rgba(34, 197, 94, 0.05)', borderColor: TYPE_COLORS.quote }]}>
@@ -149,6 +182,10 @@ export default function ChatMessageItem({
 
     return (
         <View style={[styles.wrapper, wrapperStyle]}>
+            {showFloatingReactions && (
+                <Pressable style={styles.overlay} onPress={toggleFloatingReactions} />
+            )}
+
             {!isSelf && (
                 <View style={styles.avatarWrapper}>
                     {user?.profileImage ? (
@@ -162,7 +199,25 @@ export default function ChatMessageItem({
             )}
 
             <View style={[styles.content, contentStyle]}>
-                <View style={[styles.bubble, { backgroundColor: bubbleColor }]}>
+                {showFloatingReactions && (
+                    <Animated.View style={[
+                        styles.floatingReactions,
+                        { opacity: fadeAnim, transform: [{ scale: scaleAnim }], backgroundColor: activeColors.surface },
+                        isSelf ? { right: 0 } : { left: 0 }
+                    ]}>
+                        {REACTION_EMOJIS.map(emoji => (
+                            <TouchableOpacity key={emoji} style={styles.floatingEmoji} onPress={() => selectReaction(emoji)}>
+                                <Text style={styles.floatingEmojiText}>{emoji}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </Animated.View>
+                )}
+
+                <TouchableOpacity
+                    activeOpacity={0.9}
+                    onLongPress={handleLongPress}
+                    style={[styles.bubble, { backgroundColor: bubbleColor }]}
+                >
                     {renderBadge()}
 
                     {!isSelf && user && (
@@ -194,13 +249,15 @@ export default function ChatMessageItem({
                             <View style={styles.statusIcon}>
                                 {message.status === 'sending' ? (
                                     <Clock size={10} color={activeColors.textTertiary} />
+                                ) : message.status === 'failed' ? (
+                                    <AlertCircle size={12} color="#EF4444" />
                                 ) : (
                                     <Check size={12} color={activeColors.primary} />
                                 )}
                             </View>
                         )}
                     </View>
-                </View>
+                </TouchableOpacity>
 
                 {Object.keys(reactionCounts).length > 0 && (
                     <View style={[styles.reactions, isSelf ? { alignSelf: 'flex-start' } : { alignSelf: 'flex-end' }]}>
@@ -413,5 +470,31 @@ const styles = StyleSheet.create({
     },
     reactionText: {
         fontSize: 12,
+    },
+    overlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'transparent',
+        zIndex: 90,
+    },
+    floatingReactions: {
+        flexDirection: 'row',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 30,
+        position: 'absolute',
+        top: -45,
+        zIndex: 100,
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        gap: 8,
+    },
+    floatingEmoji: {
+        padding: 4,
+    },
+    floatingEmojiText: {
+        fontSize: 24,
     },
 });
