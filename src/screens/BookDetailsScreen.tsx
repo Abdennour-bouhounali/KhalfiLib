@@ -242,7 +242,7 @@ export default function BookDetailsScreen() {
                     </Card>
 
                     {/* Admin Actions */}
-                    {(user?.role === 'admin' || user?.role === 'super_admin') && (
+                    {(user?.role === 'admin') && (
                         <View style={styles.adminSection}>
                             <Text style={[styles.adminTitle, { color: activeColors.textTertiary }]}>خيارات الإدارة</Text>
                             <View style={styles.adminButtons}>

@@ -47,6 +47,7 @@ export interface User {
     borrowedBookId?: string | null;
     previousBooksCount?: number;
     createdAt?: string;
+    fcmToken?: string;
 }
 
 // Keeping Student interface for migration reference
@@ -120,6 +121,8 @@ export interface AppNotification {
     link?: string;
     type: 'info' | 'update' | 'alert';
     version?: string; // For update notifications
+    target?: 'all' | 'admins' | 'students';
+    badgeCount?: number;
     createdAt: string;
     createdBy: string;
 }
@@ -357,6 +360,15 @@ export const UsersAPI = {
         } catch (error) {
             console.error(`[UsersAPI] update failed:`, error);
             throw error;
+        }
+    },
+
+    updateFCMToken: async (uid: string, token: string | null) => {
+        try {
+            const userRef = ref(db, `users/${uid}`);
+            await update(userRef, { fcmToken: token });
+        } catch (error) {
+            console.error(`[UsersAPI] updateFCMToken failed:`, error);
         }
     },
 
@@ -638,7 +650,7 @@ export const ChatAPI = {
             const chatRef = query(
                 ref(db, `chats/${bookId}`),
                 orderByChild('timestamp'),
-                endBefore(beforeTimestamp),
+                endBefore(beforeTimestamp), // endBefore is correct for getting messages older than this
                 limitToLast(limit)
             );
             const snapshot = await get(chatRef);
@@ -663,7 +675,7 @@ export const ChatAPI = {
 
     listenToMessages: (bookId: string, onUpdate: (msg: ChatMessage) => void) => {
         const path = `chats/${bookId}`;
-        const chatRef = query(ref(db, path), limitToLast(50));
+        const chatRef = query(ref(db, path), orderByChild('timestamp'), limitToLast(50));
 
         const handleSnapshot = (snapshot: any) => {
             if (snapshot.exists()) {
@@ -773,7 +785,7 @@ export const LibraryChatAPI = {
 
     listenToMessages: (onUpdate: (msg: LibraryChatMessage) => void) => {
         const path = `libraryMessages`;
-        const chatRef = query(ref(db, path), limitToLast(50));
+        const chatRef = query(ref(db, path), orderByChild('timestamp'), limitToLast(50));
 
         const handleSnapshot = (snapshot: any) => {
             if (snapshot.exists()) {
@@ -808,6 +820,17 @@ export const LibraryChatAPI = {
 // NOTIFICATIONS API
 // ==========================================
 export const NotificationsAPI = {
+    create: async (notification: Omit<AppNotification, 'id'>): Promise<string> => {
+        try {
+            const notifsRef = ref(db, 'notifications');
+            const newRef = await push(notifsRef, notification);
+            return newRef.key as string;
+        } catch (error) {
+            console.error('[NotificationsAPI] create failed:', error);
+            throw error;
+        }
+    },
+
     getAll: async (): Promise<AppNotification[]> => {
         try {
             // 1. Get from SQLite first (Instant load)

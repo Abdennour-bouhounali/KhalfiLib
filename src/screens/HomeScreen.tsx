@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
 import Card from '../components/Card';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { useUnreadCount } from '../hooks/useUnreadCount';
 import { BooksAPI, UsersAPI, BorrowingAPI } from '../services/database';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -18,6 +19,7 @@ export default function HomeScreen() {
     const { isDarkMode } = useTheme();
     const { logout } = useAuth();
     const activeColors = isDarkMode ? DARK_COLORS : COLORS;
+    const unreadCount = useUnreadCount();
     const [stats, setStats] = useState({
         books: 0,
         students: 0,
@@ -267,6 +269,7 @@ export default function HomeScreen() {
                 <Header
                     showLogo
                     showLogout
+                    badgeCount={unreadCount}
                     onLogout={() => {
                         Alert.alert('تسجيل الخروج', 'هل أنت متأكد من رغبتك في تسجيل الخروج؟', [
                             { text: 'إلغاء', style: 'cancel' },

@@ -277,7 +277,7 @@ export default function PublicCatalogScreen() {
             )}
 
             {/* Add Book FAB for Admins */}
-            {user && (user.role === 'admin' || user.role === 'super_admin') && (
+            {user && user.role === 'admin' && (
                 <TouchableOpacity
                     style={[styles.fab, { backgroundColor: activeColors.primary }]}
                     onPress={() => navigation.navigate('AddBook')}
@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
         marginTop: -SPACING.xxl,
     },
     filterWrapper: {
-        marginTop: SPACING.m,
+        marginTop: SPACING.xs,
         marginBottom: SPACING.m,
         paddingHorizontal: SPACING.m,
     },

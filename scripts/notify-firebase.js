@@ -32,9 +32,8 @@ async function sendNotification() {
             message: `اضغط لتحميل الإصدار الجديد من التطبيق (v${versionName}). تم تحسين الأداء وإضافة مميزات جديدة لخدمتكم.`,
             link: apkUrl,
             type: "update",
-            version: versionName,
             createdAt: new Date().toISOString(),
-            createdBy: "super_admin_system"
+            createdBy: "github_actions_automated"
         };
 
         console.log(`[Notification Script] Sending notification to path: notifications/${notifId}`);

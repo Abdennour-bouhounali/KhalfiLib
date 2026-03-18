@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Text, TextInput, TouchableOpacity, FlatList, Image, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView, Keyboard } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, StyleSheet, Text, TextInput, TouchableOpacity, FlatList, Image, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView, Keyboard, Pressable } from 'react-native';
 import { ref, push } from 'firebase/database';
 import { db } from '../services/firebase';
 import { useRoute, useNavigation } from '@react-navigation/native';
@@ -55,6 +55,8 @@ export default function BookChatScreen() {
     const [offset, setOffset] = useState(0);
     const [hasMore, setHasMore] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
+    const [activeReactionMsgId, setActiveReactionMsgId] = useState<string | null>(null);
+    const [reactionY, setReactionY] = useState(0);
 
     const flatListRef = useRef<FlatList>(null);
     const usersMapRef = useRef<Record<string, User>>({});
@@ -66,21 +68,13 @@ export default function BookChatScreen() {
 
         const unsubscribe = ChatAPI.listenToMessages(bookId, (updatedMsg: ChatMessage) => {
             setMessages(prev => {
-                const index = prev.findIndex(m => m.id === updatedMsg.id);
-                if (index !== -1) {
-                    const newMessages = [...prev];
-                    newMessages[index] = updatedMsg;
-                    return newMessages;
-                }
-                const newMessages = [...prev, updatedMsg];
-                updateParticipantCount(newMessages);
-                return newMessages;
-            });
+                const merged = [updatedMsg, ...prev];
+                const final = Array.from(new Map(merged.map(m => [m.id, m])).values())
+                    .sort((a, b) => b.timestamp - a.timestamp);
 
-            // Auto-scroll only if we are near the bottom
-            setTimeout(() => {
-                flatListRef.current?.scrollToEnd({ animated: true });
-            }, 100);
+                updateParticipantCount(final);
+                return final;
+            });
         });
 
         const showSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardVisible(true));
@@ -95,20 +89,20 @@ export default function BookChatScreen() {
 
     const loadInitialMessages = async () => {
         setLoading(true);
-        const initialMessages = await ChatAPI.getMessages(bookId, 20, 0);
-        setMessages(initialMessages);
+        const initialMessages = await ChatAPI.getMessages(bookId, 20);
+        // Reverse because inverted FlatList needs newest at index 0
+        setMessages([...initialMessages].sort((a, b) => b.timestamp - a.timestamp));
         if (initialMessages.length < 20) setHasMore(false);
         updateParticipants(initialMessages);
         updateParticipantCount(initialMessages);
         setLoading(false);
-        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 200);
     };
 
     const loadMoreMessages = async () => {
         if (!hasMore || loadingMore || messages.length === 0) return;
         setLoadingMore(true);
 
-        const oldestTimestamp = messages[0].timestamp;
+        const oldestTimestamp = messages[messages.length - 1].timestamp;
 
         // 1. Try to load from SQLite first
         let olderMessages = await ChatAPI.getMessages(bookId, 15, oldestTimestamp);
@@ -125,9 +119,10 @@ export default function BookChatScreen() {
         }
 
         setMessages(prev => {
-            const merged = [...olderMessages, ...prev];
-            // Filter duplicates by ID
-            return Array.from(new Map(merged.map(m => [m.id, m])).values());
+            const merged = [...prev, ...olderMessages];
+            // Sort to ensure reverse chronological order (newest first)
+            return Array.from(new Map(merged.map(m => [m.id, m])).values())
+                .sort((a, b) => b.timestamp - a.timestamp);
         });
 
         setLoadingMore(false);
@@ -190,9 +185,8 @@ export default function BookChatScreen() {
             status: 'sending'
         };
 
-        // 2. Instant UI update
-        setMessages(prev => [...prev, newMessage]);
-        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+        // 2. Instant UI update - prepend for inverted list
+        setMessages(prev => [newMessage, ...prev]);
 
         // 3. Reset input fields
         setInputText('');
@@ -242,7 +236,7 @@ export default function BookChatScreen() {
         ]);
     };
 
-    const handleReaction = (msgId: string, emoji: string) => {
+    const handleReaction = useCallback((msgId: string, emoji: string) => {
         if (!user) return;
         const targetMsg = messages.find(m => m.id === msgId);
         const currentReaction = targetMsg?.reactions?.[user.id!];
@@ -250,12 +244,12 @@ export default function BookChatScreen() {
         // If same emoji, remove (toggle off)
         const finalEmoji = currentReaction === emoji ? null : emoji;
         ChatAPI.toggleReaction(bookId, msgId, finalEmoji, user.id!);
-    };
+    }, [user, messages, bookId]);
 
-    const handleMessageOptions = (item: ChatMessage) => {
+    const handleMessageOptions = useCallback((item: ChatMessage) => {
         setSelectedMessage(item);
         setIsOptionsVisible(true);
-    };
+    }, []);
 
     const handleCopyText = (text: string) => {
         Alert.alert('تم النسخ', 'تم نسخ نص الرسالة إلى الحافظة');
@@ -278,7 +272,13 @@ export default function BookChatScreen() {
                 user={msgUser}
                 currentUserId={user?.id}
                 activeColors={activeColors}
+                isActive={activeReactionMsgId === item.id}
                 onReaction={(emoji) => handleReaction(item.id!, emoji)}
+                onOpenReactions={(y) => {
+                    setActiveReactionMsgId(item.id!);
+                    setReactionY(y);
+                }}
+                onCloseReactions={() => setActiveReactionMsgId(null)}
                 onOptions={() => handleMessageOptions(item)}
                 replyToMessage={replyToMessage}
                 replyToUser={replyToUser}
@@ -342,10 +342,24 @@ export default function BookChatScreen() {
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
-                    onStartReached={loadMoreMessages}
-                    onStartReachedThreshold={0.5}
-                    maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-                    ListHeaderComponent={loadingMore ? <ActivityIndicator size="small" color={activeColors.primary} style={{ marginVertical: 10 }} /> : null}
+                    inverted={true}
+                    onEndReached={loadMoreMessages}
+                    onEndReachedThreshold={0.5}
+                    initialNumToRender={12}
+                    maxToRenderPerBatch={10}
+                    windowSize={10}
+                    removeClippedSubviews={true}
+                    onScrollBeginDrag={() => {
+                        setActiveReactionMsgId(null);
+                    }}
+                    ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color={activeColors.primary} style={{ marginVertical: 10 }} /> : null}
+                />
+            )}
+
+            {showEmojis && (
+                <Pressable
+                    style={styles.emojiOverlay}
+                    onPress={() => setShowEmojis(false)}
                 />
             )}
 
@@ -421,10 +435,18 @@ export default function BookChatScreen() {
 
                 <View style={styles.inputContainer}>
                     <View style={[styles.innerInputBox, { backgroundColor: isDarkMode ? '#2C2C2C' : '#FFFFFF' }]}>
-                        <TouchableOpacity onPress={() => setShowEmojis(!showEmojis)} style={styles.iconBtn}><Smile size={24} color={activeColors.textSecondary} /></TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => {
+                                if (!showEmojis) Keyboard.dismiss();
+                                setShowEmojis(!showEmojis);
+                            }}
+                            style={styles.iconBtn}
+                        >
+                            <Smile size={24} color={activeColors.textSecondary} />
+                        </TouchableOpacity>
                         <TextInput
                             style={[styles.input, { color: activeColors.text }]}
-                            placeholder={msgType === 'review' ? "اكتب مراجعتك (اختياري)..." : "اكتب رسالة..."}
+                            placeholder={msgType === 'review' ? "اكتب مراجعتك (اختياري)..." : "  ما أجمل ما قرأت اليوم"}
                             placeholderTextColor={activeColors.textTertiary}
                             value={inputText}
                             onChangeText={setInputText}
@@ -524,12 +546,16 @@ const styles = StyleSheet.create({
     pageInput: { borderWidth: 1, borderRadius: RADIUS.s, padding: 8, fontFamily: FONTS.medium, fontSize: 14, textAlign: 'right', marginTop: 8 },
     inputContainer: { flexDirection: 'row-reverse', alignItems: 'flex-end', paddingHorizontal: 8, backgroundColor: 'transparent' },
     innerInputBox: { flex: 1, flexDirection: 'row-reverse', alignItems: 'flex-end', borderRadius: 24, marginHorizontal: 4, paddingHorizontal: 4, elevation: 1, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 1, shadowOffset: { width: 0, height: 1 } },
-    iconBtn: { padding: 10, justifyContent: 'center', alignItems: 'center' },
-    input: { flex: 1, minHeight: 40, maxHeight: 120, paddingTop: 10, paddingBottom: 10, paddingHorizontal: 4, fontFamily: FONTS.medium, fontSize: 16 },
+    iconBtn: { padding: 7, justifyContent: 'center', alignItems: 'center' },
+    input: { flex: 1, minHeight: 40, maxHeight: 120, paddingTop: 10, paddingBottom: 10, paddingHorizontal: 3, fontFamily: FONTS.medium, fontSize: 16 },
     sendButtonContainer: { justifyContent: 'flex-end', marginBottom: 4, marginLeft: 4 },
     sendButton: { width: 38, height: 38, borderRadius: 24, justifyContent: 'center', alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 2, shadowOffset: { width: 0, height: 1 } },
     emojiContainer: { borderTopWidth: 1, borderTopColor: '#EEEEEE', paddingVertical: 5 },
     replyPreviewBar: { flexDirection: 'row-reverse', alignItems: 'center', padding: SPACING.m, borderTopWidth: 1, borderTopColor: '#EEEEEE' },
     replyPreviewName: { fontFamily: FONTS.bold, fontSize: 12, textAlign: 'right', marginBottom: 2 },
     replyPreviewText: { fontFamily: FONTS.regular, fontSize: 13, textAlign: 'right' },
+    emojiOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'transparent',
+    },
 });

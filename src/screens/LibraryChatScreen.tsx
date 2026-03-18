@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Text, TextInput, TouchableOpacity, FlatList, Image, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView, Keyboard } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, StyleSheet, Text, TextInput, TouchableOpacity, FlatList, Image, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView, Keyboard, Pressable } from 'react-native';
 import { ref, push } from 'firebase/database';
 import { db } from '../services/firebase';
 import { useNavigation } from '@react-navigation/native';
@@ -27,6 +27,8 @@ export default function LibraryChatScreen() {
     const { isDarkMode } = useTheme();
     const activeColors = isDarkMode ? DARK_COLORS : COLORS;
     const insets = useSafeAreaInsets();
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
 
     const [messages, setMessages] = useState<LibraryChatMessage[]>([]);
     const [usersMap, setUsersMap] = useState<Record<string, User>>({});
@@ -40,8 +42,8 @@ export default function LibraryChatScreen() {
     const [selectedMessage, setSelectedMessage] = useState<LibraryChatMessage | null>(null);
     const [isOptionsVisible, setIsOptionsVisible] = useState(false);
     const [offset, setOffset] = useState(0);
-    const [hasMore, setHasMore] = useState(true);
-    const [loadingMore, setLoadingMore] = useState(false);
+    const [activeReactionMsgId, setActiveReactionMsgId] = useState<string | null>(null);
+    const [reactionY, setReactionY] = useState(0);
 
     const flatListRef = useRef<FlatList>(null);
     const usersMapRef = useRef<Record<string, User>>({});
@@ -52,21 +54,14 @@ export default function LibraryChatScreen() {
 
         const unsubscribe = LibraryChatAPI.listenToMessages((updatedMsg: LibraryChatMessage) => {
             setMessages(prev => {
-                const index = prev.findIndex(m => m.id === updatedMsg.id);
-                if (index !== -1) {
-                    const newMessages = [...prev];
-                    newMessages[index] = updatedMsg;
-                    return newMessages;
-                }
-                const newMessages = [...prev, updatedMsg];
-                updateParticipantCount(newMessages);
-                return newMessages;
+                const merged = [updatedMsg, ...prev];
+                const final = Array.from(new Map(merged.map(m => [m.id, m])).values())
+                    .sort((a, b) => b.timestamp - a.timestamp);
+
+                updateParticipantCount(final);
+                return final;
             });
             setLoading(false);
-
-            setTimeout(() => {
-                flatListRef.current?.scrollToEnd({ animated: true });
-            }, 100);
         });
 
         const showSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardVisible(true));
@@ -82,17 +77,19 @@ export default function LibraryChatScreen() {
     const loadInitialMessages = async () => {
         setLoading(true);
         const initialMessages = await LibraryChatAPI.getMessages(20);
-        setMessages(initialMessages);
+        // Reverse because inverted FlatList needs newest at index 0
+        const sorted = [...initialMessages].sort((a, b) => b.timestamp - a.timestamp);
+        setMessages(sorted);
         if (initialMessages.length < 20) setHasMore(false);
+        updateParticipants(initialMessages);
         setLoading(false);
-        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 200);
     };
 
     const loadMoreMessages = async () => {
         if (!hasMore || loadingMore || messages.length === 0) return;
         setLoadingMore(true);
 
-        const oldestTimestamp = messages[0].timestamp;
+        const oldestTimestamp = messages[messages.length - 1].timestamp;
 
         // 1. Try to load from SQLite first
         let olderMessages = await LibraryChatAPI.getMessages(15, oldestTimestamp);
@@ -109,12 +106,14 @@ export default function LibraryChatScreen() {
         }
 
         setMessages(prev => {
-            const merged = [...olderMessages, ...prev];
-            // Filter duplicates by ID
-            return Array.from(new Map(merged.map(m => [m.id, m])).values());
+            const merged = [...prev, ...olderMessages];
+            // Sort to ensure reverse chronological order (newest first)
+            return Array.from(new Map(merged.map(m => [m.id, m])).values())
+                .sort((a, b) => b.timestamp - a.timestamp);
         });
 
         setLoadingMore(false);
+        updateParticipants(olderMessages);
     };
 
     const updateParticipants = (msgs: LibraryChatMessage[]) => {
@@ -157,9 +156,8 @@ export default function LibraryChatScreen() {
             status: 'sending'
         };
 
-        // 2. Instant UI update
-        setMessages(prev => [...prev, newMessage]);
-        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+        // 2. Instant UI update - prepend for inverted list
+        setMessages(prev => [newMessage, ...prev]);
 
         // 3. Reset input fields
         setInputText('');
@@ -226,7 +224,7 @@ export default function LibraryChatScreen() {
         );
     };
 
-    const handleReaction = (msgId: string, emoji: string) => {
+    const handleReaction = useCallback((msgId: string, emoji: string) => {
         if (!user) return;
         const targetMsg = messages.find(m => m.id === msgId);
         const currentReaction = targetMsg?.reactions?.[user.id!];
@@ -234,12 +232,12 @@ export default function LibraryChatScreen() {
         // If same emoji, remove (toggle off)
         const finalEmoji = currentReaction === emoji ? null : emoji;
         LibraryChatAPI.toggleReaction(msgId, finalEmoji, user.id!);
-    };
+    }, [user, messages]);
 
-    const handleMessageOptions = (item: LibraryChatMessage) => {
+    const handleMessageOptions = useCallback((item: LibraryChatMessage) => {
         setSelectedMessage(item);
         setIsOptionsVisible(true);
-    };
+    }, []);
 
     const handleCopyText = (text: string) => {
         Alert.alert('تم النسخ', 'تم نسخ نص الرسالة إلى الحافظة');
@@ -267,7 +265,13 @@ export default function LibraryChatScreen() {
                 user={msgUser}
                 currentUserId={user?.id}
                 activeColors={activeColors}
+                isActive={activeReactionMsgId === item.id}
                 onReaction={(emoji) => handleReaction(item.id!, emoji)}
+                onOpenReactions={(y) => {
+                    setActiveReactionMsgId(item.id!);
+                    setReactionY(y);
+                }}
+                onCloseReactions={() => setActiveReactionMsgId(null)}
                 onOptions={() => handleMessageOptions(item)}
                 replyToMessage={replyToMessage}
                 replyToUser={replyToUser}
@@ -309,10 +313,24 @@ export default function LibraryChatScreen() {
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
-                    onStartReached={loadMoreMessages}
-                    onStartReachedThreshold={0.5}
-                    maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-                    ListHeaderComponent={loadingMore ? <ActivityIndicator size="small" color={activeColors.primary} style={{ marginVertical: 10 }} /> : null}
+                    inverted={true}
+                    onEndReached={loadMoreMessages}
+                    onEndReachedThreshold={0.5}
+                    initialNumToRender={12}
+                    maxToRenderPerBatch={10}
+                    windowSize={10}
+                    removeClippedSubviews={true}
+                    onScrollBeginDrag={() => {
+                        setActiveReactionMsgId(null);
+                    }}
+                    ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color={activeColors.primary} style={{ marginVertical: 10 }} /> : null}
+                />
+            )}
+
+            {showEmojis && (
+                <Pressable
+                    style={styles.emojiOverlay}
+                    onPress={() => setShowEmojis(false)}
                 />
             )}
 
@@ -367,7 +385,13 @@ export default function LibraryChatScreen() {
 
                 <View style={styles.inputContainer}>
                     <View style={[styles.innerInputBox, { backgroundColor: isDarkMode ? '#2C2C2C' : '#FFFFFF' }]}>
-                        <TouchableOpacity onPress={() => setShowEmojis(!showEmojis)} style={styles.iconBtn}>
+                        <TouchableOpacity
+                            onPress={() => {
+                                if (!showEmojis) Keyboard.dismiss();
+                                setShowEmojis(!showEmojis);
+                            }}
+                            style={styles.iconBtn}
+                        >
                             <Smile size={24} color={activeColors.textSecondary} />
                         </TouchableOpacity>
 
@@ -602,5 +626,9 @@ const styles = StyleSheet.create({
         fontFamily: FONTS.regular,
         fontSize: 13,
         textAlign: 'right',
+    },
+    emojiOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'transparent',
     },
 });
