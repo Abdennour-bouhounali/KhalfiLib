@@ -1,7 +1,7 @@
-import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, Pressable, Vibration, Dimensions, ScrollView } from 'react-native';
-import { MoreVertical, Quote as QuoteIcon, Star, AlertCircle, HelpCircle, MessageCircle, Lightbulb, BookOpen, User as UserIcon, MessageSquare, Clock, Check, CheckCheck, Plus } from 'lucide-react-native';
-import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import { MoreVertical, Quote as QuoteIcon, Star, AlertCircle, HelpCircle, MessageCircle, Lightbulb, BookOpen, User as UserIcon, MessageSquare, Clock, Check } from 'lucide-react-native';
+import { FONTS, SPACING, RADIUS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { ChatMessage, LibraryChatMessage, User } from '../services/database';
 
@@ -11,12 +11,8 @@ interface ChatMessageItemProps {
     user?: User;
     currentUserId?: string;
     activeColors: any;
-    onReaction: (emoji: string) => void;
     onLongPress?: () => void;
     onOptions: () => void;
-    isActive?: boolean;
-    onOpenReactions?: (y: number) => void;
-    onCloseReactions?: () => void;
     replyToMessage?: ChatMessage | LibraryChatMessage;
     replyToUser?: User;
 }
@@ -37,14 +33,8 @@ const ChatMessageItem = React.memo(({
     message,
     isSelf,
     user,
-    currentUserId,
     activeColors,
-    onReaction,
-    onLongPress,
     onOptions,
-    isActive = false,
-    onOpenReactions,
-    onCloseReactions,
     replyToMessage,
     replyToUser
 }: ChatMessageItemProps) => {
@@ -58,55 +48,6 @@ const ChatMessageItem = React.memo(({
     const formatTime = (ts: number) => {
         const d = new Date(ts);
         return d.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
-    };
-
-    const reactionCounts = useMemo(() => {
-        if (!message.reactions) return {};
-        return Object.values(message.reactions).reduce((acc: Record<string, number>, emoji) => {
-            acc[emoji] = (acc[emoji] || 0) + 1;
-            return acc;
-        }, {});
-    }, [message.reactions]);
-
-    const myReaction = message.reactions && currentUserId ? message.reactions[currentUserId] : null;
-
-    const bubbleRef = useRef<View>(null);
-    const [showBarBelow, setShowBarBelow] = useState(false);
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-    const scaleAnim = useRef(new Animated.Value(0.9)).current;
-    const yAnim = useRef(new Animated.Value(10)).current;
-
-    useEffect(() => {
-        if (isActive) {
-            Animated.parallel([
-                Animated.timing(fadeAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
-                Animated.spring(scaleAnim, { toValue: 1, friction: 8, tension: 40, useNativeDriver: true }),
-                Animated.timing(yAnim, { toValue: 0, duration: 250, useNativeDriver: true })
-            ]).start();
-        } else {
-            Animated.parallel([
-                Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
-                Animated.timing(scaleAnim, { toValue: 0.9, duration: 200, useNativeDriver: true }),
-                Animated.timing(yAnim, { toValue: 10, duration: 200, useNativeDriver: true })
-            ]).start();
-        }
-    }, [isActive]);
-
-    const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '👏'];
-
-    const handleLongPress = () => {
-        Vibration.vibrate(10);
-        bubbleRef.current?.measureInWindow((x, y, width, height) => {
-            setShowBarBelow(y < 150);
-            onOpenReactions?.(y);
-        });
-        onLongPress?.();
-    };
-
-    const selectReaction = (emoji: string) => {
-        Vibration.vibrate(5);
-        onReaction(emoji);
-        onCloseReactions?.();
     };
 
     const renderQuote = (msg: ChatMessage) => (
@@ -194,71 +135,8 @@ const ChatMessageItem = React.memo(({
         }
     };
 
-    const screenWidth = Dimensions.get('window').width;
-    const screenHeight = Dimensions.get('window').height;
-    const barWidth = screenWidth * 0.9;
-    const barLeft = (screenWidth - barWidth) / 2 - SPACING.s; // Adjust for wrapper padding
-
     return (
-        <View style={[styles.wrapper, wrapperStyle, isActive && { zIndex: 1000 }]}>
-            {isActive && (
-                <>
-                    <Pressable
-                        style={{
-                            position: 'absolute',
-                            width: screenWidth * 3,
-                            height: screenHeight * 3,
-                            left: -screenWidth,
-                            top: -screenHeight,
-                            zIndex: 900,
-                        }}
-                        onPress={onCloseReactions}
-                    />
-                    <Animated.View style={[
-                        styles.floatingReactions,
-                        {
-                            opacity: fadeAnim,
-                            transform: [
-                                { scale: scaleAnim },
-                                { translateY: showBarBelow ? Animated.multiply(yAnim, -1) : yAnim }
-                            ],
-                            backgroundColor: isDarkMode ? '#2C2C2C' : '#FDFDFD',
-                            top: showBarBelow ? 'auto' : -60,
-                            bottom: showBarBelow ? -60 : 'auto',
-                            zIndex: 1000,
-                            width: barWidth,
-                            left: barLeft,
-                        }
-                    ]}>
-                        <ScrollView
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            contentContainerStyle={styles.reactionScrollContent}
-                        >
-                            {REACTION_EMOJIS.map(emoji => (
-                                <TouchableOpacity
-                                    key={emoji}
-                                    style={styles.floatingEmoji}
-                                    activeOpacity={0.7}
-                                    onPress={() => selectReaction(emoji)}
-                                >
-                                    <Text style={styles.floatingEmojiText}>{emoji}</Text>
-                                </TouchableOpacity>
-                            ))}
-                            <TouchableOpacity
-                                style={styles.plusButton}
-                                onPress={() => {
-                                    onCloseReactions?.();
-                                    onOptions();
-                                }}
-                            >
-                                <Plus size={20} color={isDarkMode ? '#AAA' : '#888'} />
-                            </TouchableOpacity>
-                        </ScrollView>
-                    </Animated.View>
-                </>
-            )}
-
+        <View style={[styles.wrapper, wrapperStyle]}>
             {!isSelf && (
                 <View style={styles.avatarWrapper}>
                     {user?.profileImage ? (
@@ -273,21 +151,13 @@ const ChatMessageItem = React.memo(({
 
             <View style={[styles.content, contentStyle]}>
                 <TouchableOpacity
-                    ref={bubbleRef}
                     activeOpacity={0.9}
+                    onPress={onOptions}
+                    onLongPress={onOptions}
                     delayLongPress={300}
-                    onLongPress={handleLongPress}
                     style={[
                         styles.bubble,
-                        { backgroundColor: bubbleColor },
-                        isActive && {
-                            opacity: 1,
-                            transform: [{ scale: 1.02 }],
-                            zIndex: 10,
-                            shadowColor: activeColors.primary,
-                            shadowOpacity: 0.2,
-                            shadowRadius: 15,
-                        }
+                        { backgroundColor: bubbleColor }
                     ]}
                 >
                     {renderBadge()}
@@ -330,24 +200,6 @@ const ChatMessageItem = React.memo(({
                         )}
                     </View>
                 </TouchableOpacity>
-
-                {Object.keys(reactionCounts).length > 0 && (
-                    <View style={[styles.reactions, isSelf ? { alignSelf: 'flex-start' } : { alignSelf: 'flex-end' }]}>
-                        {Object.entries(reactionCounts).map(([emoji, count]) => (
-                            <TouchableOpacity
-                                key={emoji}
-                                style={[
-                                    styles.reactionPill,
-                                    { backgroundColor: activeColors.surface, borderColor: activeColors.border },
-                                    myReaction === emoji && { borderColor: activeColors.primary, backgroundColor: isDarkMode ? '#1E3A2F' : '#E6F4EA' }
-                                ]}
-                                onPress={() => onReaction(emoji)}
-                            >
-                                <Text style={styles.reactionText}>{emoji} {count}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                )}
             </View>
 
             <TouchableOpacity style={styles.optionsBtn} onPress={onOptions}>
@@ -526,59 +378,5 @@ const styles = StyleSheet.create({
         color: '#FFF',
         fontSize: 10,
         fontFamily: FONTS.bold,
-    },
-    reactions: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        marginTop: -10,
-        zIndex: 10,
-        gap: 4,
-    },
-    reactionPill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 12,
-        borderWidth: 1,
-    },
-    reactionText: {
-        fontSize: 12,
-    },
-    floatingReactions: {
-        borderRadius: 30,
-        position: 'absolute',
-        elevation: 10,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.25,
-        shadowRadius: 10,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: 'rgba(0,0,0,0.05)',
-        overflow: 'hidden',
-    },
-    reactionScrollContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        gap: 16,
-        flexGrow: 1,
-        justifyContent: 'center',
-    },
-    floatingEmoji: {
-        padding: 4,
-    },
-    floatingEmojiText: {
-        fontSize: 26,
-    },
-    plusButton: {
-        width: 34,
-        height: 34,
-        borderRadius: 17,
-        backgroundColor: 'rgba(0,0,0,0.05)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginLeft: 4,
     },
 });

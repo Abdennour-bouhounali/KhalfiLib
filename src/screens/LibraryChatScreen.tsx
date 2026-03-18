@@ -42,8 +42,6 @@ export default function LibraryChatScreen() {
     const [selectedMessage, setSelectedMessage] = useState<LibraryChatMessage | null>(null);
     const [isOptionsVisible, setIsOptionsVisible] = useState(false);
     const [offset, setOffset] = useState(0);
-    const [activeReactionMsgId, setActiveReactionMsgId] = useState<string | null>(null);
-    const [reactionY, setReactionY] = useState(0);
 
     const flatListRef = useRef<FlatList>(null);
     const usersMapRef = useRef<Record<string, User>>({});
@@ -224,15 +222,6 @@ export default function LibraryChatScreen() {
         );
     };
 
-    const handleReaction = useCallback((msgId: string, emoji: string) => {
-        if (!user) return;
-        const targetMsg = messages.find(m => m.id === msgId);
-        const currentReaction = targetMsg?.reactions?.[user.id!];
-
-        // If same emoji, remove (toggle off)
-        const finalEmoji = currentReaction === emoji ? null : emoji;
-        LibraryChatAPI.toggleReaction(msgId, finalEmoji, user.id!);
-    }, [user, messages]);
 
     const handleMessageOptions = useCallback((item: LibraryChatMessage) => {
         setSelectedMessage(item);
@@ -265,13 +254,6 @@ export default function LibraryChatScreen() {
                 user={msgUser}
                 currentUserId={user?.id}
                 activeColors={activeColors}
-                isActive={activeReactionMsgId === item.id}
-                onReaction={(emoji) => handleReaction(item.id!, emoji)}
-                onOpenReactions={(y) => {
-                    setActiveReactionMsgId(item.id!);
-                    setReactionY(y);
-                }}
-                onCloseReactions={() => setActiveReactionMsgId(null)}
                 onOptions={() => handleMessageOptions(item)}
                 replyToMessage={replyToMessage}
                 replyToUser={replyToUser}
@@ -321,7 +303,6 @@ export default function LibraryChatScreen() {
                     windowSize={10}
                     removeClippedSubviews={true}
                     onScrollBeginDrag={() => {
-                        setActiveReactionMsgId(null);
                         setShowEmojis(false);
                     }}
                     onTouchStart={() => setShowEmojis(false)}

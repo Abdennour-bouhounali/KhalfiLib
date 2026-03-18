@@ -55,8 +55,6 @@ export default function BookChatScreen() {
     const [offset, setOffset] = useState(0);
     const [hasMore, setHasMore] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
-    const [activeReactionMsgId, setActiveReactionMsgId] = useState<string | null>(null);
-    const [reactionY, setReactionY] = useState(0);
 
     const flatListRef = useRef<FlatList>(null);
     const usersMapRef = useRef<Record<string, User>>({});
@@ -236,15 +234,6 @@ export default function BookChatScreen() {
         ]);
     };
 
-    const handleReaction = useCallback((msgId: string, emoji: string) => {
-        if (!user) return;
-        const targetMsg = messages.find(m => m.id === msgId);
-        const currentReaction = targetMsg?.reactions?.[user.id!];
-
-        // If same emoji, remove (toggle off)
-        const finalEmoji = currentReaction === emoji ? null : emoji;
-        ChatAPI.toggleReaction(bookId, msgId, finalEmoji, user.id!);
-    }, [user, messages, bookId]);
 
     const handleMessageOptions = useCallback((item: ChatMessage) => {
         setSelectedMessage(item);
@@ -272,13 +261,6 @@ export default function BookChatScreen() {
                 user={msgUser}
                 currentUserId={user?.id}
                 activeColors={activeColors}
-                isActive={activeReactionMsgId === item.id}
-                onReaction={(emoji) => handleReaction(item.id!, emoji)}
-                onOpenReactions={(y) => {
-                    setActiveReactionMsgId(item.id!);
-                    setReactionY(y);
-                }}
-                onCloseReactions={() => setActiveReactionMsgId(null)}
                 onOptions={() => handleMessageOptions(item)}
                 replyToMessage={replyToMessage}
                 replyToUser={replyToUser}
@@ -350,7 +332,6 @@ export default function BookChatScreen() {
                     windowSize={10}
                     removeClippedSubviews={true}
                     onScrollBeginDrag={() => {
-                        setActiveReactionMsgId(null);
                         setShowEmojis(false);
                     }}
                     onTouchStart={() => setShowEmojis(false)}
