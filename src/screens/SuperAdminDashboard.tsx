@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { ref, get } from 'firebase/database';
 import { db } from '../services/firebase';
-import { UserCheck, UserX, LogOut, ShieldCheck, BookOpen, RefreshCw, ChevronLeft } from 'lucide-react-native';
+import { UserCheck, UserX, LogOut, ShieldCheck, BookOpen, RefreshCw, ChevronLeft, Trash2, UserMinus } from 'lucide-react-native';
 import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
-import { UsersAPI, User, BooksAPI } from '../services/database';
+import { UsersAPI, User, BooksAPI, AdminAPI } from '../services/database';
 import { MigrationService } from '../services/MigrationService';
 import { useAuth } from '../context/AuthContext';
 import Card from '../components/Card';
@@ -87,6 +87,44 @@ export default function SuperAdminDashboard() {
         loadData();
     }, []);
 
+    const handleClearChats = async () => {
+        Alert.alert(
+            'تأكيد الحذف',
+            'سيتم حذف جميع محادثات الكتب ونقاش المكتبة نهائياً. هل تود الاستمرار؟',
+            [
+                { text: 'إلغاء', style: 'cancel' },
+                {
+                    text: 'حذف الكل',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            setLoading(true);
+                            await AdminAPI.clearAllChats();
+                            Alert.alert('نجاح', 'تم حذف جميع المحادثات بنجاح');
+                        } catch (error) {
+                            Alert.alert('خطأ', 'فشلت عملية الحذف');
+                        } finally {
+                            setLoading(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleCleanupAdmins = async () => {
+        try {
+            setLoading(true);
+            await AdminAPI.cleanupDuplicateSuperAdmins();
+            Alert.alert('نجاح', 'تم تنظيف الحسابات المكررة بنجاح');
+            loadData();
+        } catch (error) {
+            Alert.alert('خطأ', 'فشلت عملية التنظيف');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleAction = async (uid: string, status: 'active' | 'rejected') => {
         try {
             await UsersAPI.update(uid, { status });
@@ -164,6 +202,28 @@ export default function SuperAdminDashboard() {
                         )}
                     </TouchableOpacity>
                 )}
+
+                {/* Administrative Actions */}
+                <View style={styles.adminActions}>
+                    <Text style={[styles.sectionTitle, { color: activeColors.text }]}>إجراءات إدارية</Text>
+                    <View style={styles.adminActionButtons}>
+                        <TouchableOpacity
+                            style={[styles.adminActionBtn, { backgroundColor: activeColors.surface, borderColor: activeColors.danger }]}
+                            onPress={handleClearChats}
+                        >
+                            <Trash2 color={activeColors.danger} size={20} />
+                            <Text style={[styles.adminActionText, { color: activeColors.danger }]}>حذف المحادثات</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.adminActionBtn, { backgroundColor: activeColors.surface, borderColor: activeColors.primary }]}
+                            onPress={handleCleanupAdmins}
+                        >
+                            <UserMinus color={activeColors.primary} size={20} />
+                            <Text style={[styles.adminActionText, { color: activeColors.primary }]}>تنظيف المشرفين</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
 
                 <View style={styles.sectionHeader}>
                     <Text style={[styles.sectionTitle, { color: activeColors.text }]}>طلبات انضمام المسؤولين</Text>
@@ -364,6 +424,27 @@ const styles = StyleSheet.create({
         marginBottom: SPACING.xl,
     },
     migrationText: {
+        fontFamily: FONTS.bold,
+        fontSize: 14,
+    },
+    adminActions: {
+        marginBottom: SPACING.xl,
+    },
+    adminActionButtons: {
+        flexDirection: 'row-reverse',
+        gap: SPACING.m,
+    },
+    adminActionBtn: {
+        flex: 1,
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: 50,
+        borderRadius: RADIUS.m,
+        borderWidth: 1,
+        gap: SPACING.s,
+    },
+    adminActionText: {
         fontFamily: FONTS.bold,
         fontSize: 14,
     },

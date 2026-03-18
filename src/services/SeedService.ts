@@ -8,10 +8,17 @@ export const SeedService = {
         try {
             console.log('[SeedService] Checking for Super Admin...');
 
-            // Check if super_admin exists
-            const admins = await UsersAPI.getAll('super_admin');
+            // Check if super_admin exists directly in Firebase
+            const usersRef = ref(db, 'users');
+            const snapshot = await get(usersRef);
+            let superAdminExists = false;
 
-            if (admins.length === 0) {
+            if (snapshot.exists()) {
+                const users = snapshot.val();
+                superAdminExists = Object.values(users).some((u: any) => u.role === 'super_admin');
+            }
+
+            if (!superAdminExists) {
                 console.log('[SeedService] No Super Admin found. Seeding...');
 
                 const superAdminPhone = '0558985560';

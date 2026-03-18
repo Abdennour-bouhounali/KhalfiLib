@@ -925,6 +925,53 @@ export const NotificationsAPI = {
 };
 
 // ==========================================
+// ADMIN API
+// ==========================================
+export const AdminAPI = {
+    clearAllChats: async () => {
+        try {
+            const chatsRef = ref(db, 'chats');
+            const libraryMessagesRef = ref(db, 'libraryMessages');
+            await remove(chatsRef);
+            await remove(libraryMessagesRef);
+            console.log('[AdminAPI] All chats cleared successfully.');
+        } catch (error) {
+            console.error('[AdminAPI] clearAllChats failed:', error);
+            throw error;
+        }
+    },
+    cleanupDuplicateSuperAdmins: async () => {
+        try {
+            const usersRef = ref(db, 'users');
+            const snapshot = await get(usersRef);
+            if (!snapshot.exists()) return;
+
+            const users = snapshot.val();
+            const superAdminPhone = '0558985560';
+            const entries = Object.entries(users);
+
+            // Find all super_admin entries with the default phone
+            const duplicates = entries.filter(([id, data]: [string, any]) =>
+                data.role === 'super_admin' && data.phone === superAdminPhone
+            );
+
+            if (duplicates.length > 1) {
+                // Keep the first one, delete the rest
+                const [keep, ...toDelete] = duplicates;
+                console.log(`[AdminAPI] Found ${duplicates.length} super admin duplicates. Keeping ${keep[0]}, deleting others.`);
+
+                for (const [id] of toDelete) {
+                    await remove(ref(db, `users/${id}`));
+                }
+            }
+        } catch (error) {
+            console.error('[AdminAPI] cleanupDuplicateSuperAdmins failed:', error);
+            throw error;
+        }
+    }
+};
+
+// ==========================================
 // DEPRECATED STUDENTS API (For Migration Only)
 // ==========================================
 export const StudentsAPI = {
