@@ -10,7 +10,6 @@ import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { SeedService } from './src/services/SeedService';
 import { CacheSyncService } from './src/services/CacheSyncService';
 import NotificationHandler from './src/components/NotificationHandler';
-import { useNotifications } from './src/hooks/useNotifications';
 
 function AppContent() {
   const { isDarkMode } = useTheme();
@@ -28,8 +27,6 @@ function AppContent() {
       return () => stopUserSync();
     }
   }, [user?.id]);
-
-  useNotifications();
 
   return (
     <>

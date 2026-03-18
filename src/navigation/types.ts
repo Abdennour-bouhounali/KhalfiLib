@@ -22,7 +22,6 @@ export type RootStackParamList = {
     ManageSubscription: { studentId: string };
     AdminSubscriptions: undefined;
     Notifications: undefined;
-    SendNotification: undefined;
 };
 
 export type MainTabParamList = {

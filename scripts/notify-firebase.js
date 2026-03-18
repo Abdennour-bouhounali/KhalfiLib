@@ -31,6 +31,7 @@ async function sendNotification() {
             title: "تحديث جديد متوفر",
             message: `اضغط لتحميل الإصدار الجديد من التطبيق (v${versionName}). تم تحسين الأداء وإضافة مميزات جديدة لخدمتكم.`,
             link: apkUrl,
+            version: versionName,
             type: "update",
             createdAt: new Date().toISOString(),
             createdBy: "github_actions_automated"

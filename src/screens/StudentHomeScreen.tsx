@@ -9,7 +9,6 @@ import Card from '../components/Card';
 import Header from '../components/Header';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { CreditCard, Calendar as CalendarIcon, AlertTriangle } from 'lucide-react-native';
-import { useUnreadCount } from '../hooks/useUnreadCount';
 
 export default function StudentHomeScreen() {
     const { isDarkMode } = useTheme();
@@ -17,7 +16,6 @@ export default function StudentHomeScreen() {
     const { logout, user: currentUser } = useAuth();
     const navigation = useNavigation<any>();
     const isFocused = useIsFocused();
-    const unreadCount = useUnreadCount();
 
     const [borrowedBook, setBorrowedBook] = useState<Book | null>(null);
     const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -52,7 +50,6 @@ export default function StudentHomeScreen() {
                 <Header
                     showLogo
                     showLogout
-                    badgeCount={unreadCount}
                     onLogout={() => {
                         Alert.alert('تسجيل الخروج', 'هل أنت متأكد من رغبتك في تسجيل الخروج؟', [
                             { text: 'إلغاء', style: 'cancel' },

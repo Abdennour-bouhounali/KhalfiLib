@@ -45,16 +45,8 @@ export default function NotificationScreen() {
             // 1. Filter out deleted ones locally for the user
             const nonDeleted = data.filter(n => !deletedIds.includes(n.id!));
 
-            // 2. Filter by target (Role-based filtering)
-            const roleFiltered = nonDeleted.filter(n => {
-                if (!n.target || n.target === 'all') return true;
-                if (user?.role === 'student' && n.target === 'students') return true;
-                if ((user?.role === 'admin' || user?.role === 'super_admin') && n.target === 'admins') return true;
-                return false;
-            });
-
-            // 3. Filter out update notifications that are older or equal to current version
-            const versionFiltered = roleFiltered.filter(n =>
+            // 2. Filter out update notifications that are older or equal to current version
+            const versionFiltered = nonDeleted.filter(n =>
                 n.type !== 'update' || isVersionNewer(n.version)
             );
 

@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity, Linking, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AlertTriangle, Download, X } from 'lucide-react-native';
-import Constants from 'expo-constants';
 import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { NotificationsAPI, AppNotification } from '../services/database';
@@ -37,9 +36,6 @@ export default function NotificationHandler() {
     };
 
     useEffect(() => {
-        const isExpoGo = Constants.appOwnership === 'expo';
-        if (isExpoGo) return;
-
         const unsubscribe = NotificationsAPI.listenToLatest(async (notif) => {
             if (!notif || notif.type !== 'update') return;
 

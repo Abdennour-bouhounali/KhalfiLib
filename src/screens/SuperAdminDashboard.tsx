@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { ref, get } from 'firebase/database';
 import { db } from '../services/firebase';
-import { UserCheck, UserX, LogOut, ShieldCheck, BookOpen, RefreshCw, ChevronLeft, Bell } from 'lucide-react-native';
+import { UserCheck, UserX, LogOut, ShieldCheck, BookOpen, RefreshCw, ChevronLeft } from 'lucide-react-native';
 import { COLORS, DARK_COLORS, FONTS, SPACING, RADIUS } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { UsersAPI, User, BooksAPI } from '../services/database';
@@ -11,14 +11,12 @@ import { useAuth } from '../context/AuthContext';
 import Card from '../components/Card';
 import Header from '../components/Header';
 import { useNavigation } from '@react-navigation/native';
-import { useUnreadCount } from '../hooks/useUnreadCount';
 
 export default function SuperAdminDashboard() {
     const { isDarkMode } = useTheme();
     const activeColors = isDarkMode ? DARK_COLORS : COLORS;
     const { logout, user: currentUser } = useAuth();
     const navigation = useNavigation<any>();
-    const unreadCount = useUnreadCount();
 
     const [pendingAdmins, setPendingAdmins] = useState<User[]>([]);
     const [stats, setStats] = useState({ admins: 0, students: 0, books: 0 });
@@ -105,7 +103,6 @@ export default function SuperAdminDashboard() {
                 <Header
                     showLogo
                     showLogout
-                    badgeCount={unreadCount}
                     onLogout={() => {
                         Alert.alert('تسجيل الخروج', 'هل أنت متأكد من رغبتك في تسجيل الخروج؟', [
                             { text: 'إلغاء', style: 'cancel' },
@@ -149,14 +146,6 @@ export default function SuperAdminDashboard() {
                 >
                     <ShieldCheck color={activeColors.surface} size={20} />
                     <Text style={[styles.manageAdminsText, { color: activeColors.surface }]}>إدارة المسؤولين</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[styles.manageAdminsBtn, { backgroundColor: '#455A64', marginBottom: SPACING.xl }]}
-                    onPress={() => navigation.navigate('SendNotification')}
-                >
-                    <Bell color={activeColors.surface} size={20} />
-                    <Text style={[styles.manageAdminsText, { color: activeColors.surface }]}>إرسال إشعار للنظام</Text>
                 </TouchableOpacity>
 
                 {showMigration && (
@@ -243,21 +232,17 @@ const styles = StyleSheet.create({
         flexDirection: 'row-reverse',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: SPACING.xl,
+        marginBottom: SPACING.l,
         paddingHorizontal: SPACING.s,
     },
     welcomeText: {
         fontFamily: FONTS.bold,
-        fontSize: 22,
-        textAlign: 'center',
-        marginRight: SPACING.xxl,
+        fontSize: 20,
     },
     roleLabel: {
         fontFamily: FONTS.medium,
         fontSize: 14,
-        textAlign: 'center',
-        marginRight: SPACING.xxl,
-
+        textAlign: 'right',
     },
     logoutButton: {
         padding: SPACING.s,

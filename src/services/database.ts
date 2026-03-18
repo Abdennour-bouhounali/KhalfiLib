@@ -47,7 +47,6 @@ export interface User {
     borrowedBookId?: string | null;
     previousBooksCount?: number;
     createdAt?: string;
-    fcmToken?: string;
 }
 
 // Keeping Student interface for migration reference
@@ -121,8 +120,6 @@ export interface AppNotification {
     link?: string;
     type: 'info' | 'update' | 'alert';
     version?: string; // For update notifications
-    target?: 'all' | 'admins' | 'students';
-    badgeCount?: number;
     createdAt: string;
     createdBy: string;
 }
@@ -360,15 +357,6 @@ export const UsersAPI = {
         } catch (error) {
             console.error(`[UsersAPI] update failed:`, error);
             throw error;
-        }
-    },
-
-    updateFCMToken: async (uid: string, token: string | null) => {
-        try {
-            const userRef = ref(db, `users/${uid}`);
-            await update(userRef, { fcmToken: token });
-        } catch (error) {
-            console.error(`[UsersAPI] updateFCMToken failed:`, error);
         }
     },
 
@@ -820,17 +808,6 @@ export const LibraryChatAPI = {
 // NOTIFICATIONS API
 // ==========================================
 export const NotificationsAPI = {
-    create: async (notification: Omit<AppNotification, 'id'>): Promise<string> => {
-        try {
-            const notifsRef = ref(db, 'notifications');
-            const newRef = await push(notifsRef, notification);
-            return newRef.key as string;
-        } catch (error) {
-            console.error('[NotificationsAPI] create failed:', error);
-            throw error;
-        }
-    },
-
     getAll: async (): Promise<AppNotification[]> => {
         try {
             // 1. Get from SQLite first (Instant load)

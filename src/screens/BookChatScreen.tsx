@@ -351,15 +351,10 @@ export default function BookChatScreen() {
                     removeClippedSubviews={true}
                     onScrollBeginDrag={() => {
                         setActiveReactionMsgId(null);
+                        setShowEmojis(false);
                     }}
+                    onTouchStart={() => setShowEmojis(false)}
                     ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color={activeColors.primary} style={{ marginVertical: 10 }} /> : null}
-                />
-            )}
-
-            {showEmojis && (
-                <Pressable
-                    style={styles.emojiOverlay}
-                    onPress={() => setShowEmojis(false)}
                 />
             )}
 
@@ -450,6 +445,7 @@ export default function BookChatScreen() {
                             placeholderTextColor={activeColors.textTertiary}
                             value={inputText}
                             onChangeText={setInputText}
+                            onFocus={() => setShowEmojis(false)}
                             multiline
                             textAlign="right"
                         />
@@ -554,8 +550,4 @@ const styles = StyleSheet.create({
     replyPreviewBar: { flexDirection: 'row-reverse', alignItems: 'center', padding: SPACING.m, borderTopWidth: 1, borderTopColor: '#EEEEEE' },
     replyPreviewName: { fontFamily: FONTS.bold, fontSize: 12, textAlign: 'right', marginBottom: 2 },
     replyPreviewText: { fontFamily: FONTS.regular, fontSize: 13, textAlign: 'right' },
-    emojiOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'transparent',
-    },
 });

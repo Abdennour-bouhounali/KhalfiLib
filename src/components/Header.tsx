@@ -22,7 +22,6 @@ interface HeaderProps {
     onLogout?: () => void;
     showBack?: boolean;
     onBackPress?: () => void;
-    badgeCount?: number;
 }
 
 export default function Header({
@@ -39,8 +38,7 @@ export default function Header({
     showLogout = false,
     onLogout,
     showBack = false,
-    onBackPress,
-    badgeCount = 0
+    onBackPress
 }: HeaderProps) {
     const navigation = useNavigation<any>();
     const { isDarkMode } = useTheme();
@@ -101,12 +99,7 @@ export default function Header({
                         {showNotification && (
                             <TouchableOpacity style={styles.notificationButton} onPress={handleNotificationPress}>
                                 <Bell color={activeColors.text} size={20} />
-                                {badgeCount > 0 && (
-                                    <View style={[styles.badge, { backgroundColor: COLORS.danger, width: 18, height: 18, borderRadius: 9, top: -4, right: -4 }]}>
-                                        <Text style={{ color: '#FFF', fontSize: 10, fontFamily: FONTS.bold }}>{badgeCount > 9 ? '+9' : badgeCount}</Text>
-                                    </View>
-                                )}
-                                {badgeCount === 0 && <View style={[styles.badge, { backgroundColor: activeColors.primaryLight }]} />}
+                                <View style={[styles.badge, { backgroundColor: activeColors.primaryLight }]} />
                             </TouchableOpacity>
                         )}
                     </View>
